@@ -1,0 +1,22 @@
+# Caddy terminates TLS and proxies to the app on localhost:8080.
+# ARCADE_DOMAIN is substituted by setup-vm.sh (a real domain, or <ip>.nip.io).
+# Certificates are fetched and renewed automatically; nothing to configure.
+ARCADE_DOMAIN {
+	encode zstd gzip
+
+	# The app caps sprite uploads at 512 KB; refuse anything wilder up front.
+	request_body {
+		max_size 2MB
+	}
+
+	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output file /var/log/caddy/arcade.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+	}
+}

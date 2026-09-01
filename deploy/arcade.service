@@ -1,0 +1,28 @@
+[Unit]
+Description=Arcade game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=arcade
+Group=arcade
+WorkingDirectory=/opt/arcade/app
+# ARCADE_ADMIN_PASSWORD and ARCADE_SECRET_KEY live here, root-owned, mode 600.
+EnvironmentFile=/etc/arcade.env
+Environment=ARCADE_PROD=1
+Environment=PORT=8080
+ExecStart=/opt/arcade/venv/bin/python app.py
+Restart=on-failure
+RestartSec=3
+
+# The app only ever needs to write its own data directory.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ReadWritePaths=/opt/arcade/app/data
+
+[Install]
+WantedBy=multi-user.target
