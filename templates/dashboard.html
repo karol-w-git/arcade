@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arcade — dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <h1>Arcade</h1>
+      <span>{{ instances|length }} instance{{ '' if instances|length == 1 else 's' }}</span>
+    </div>
+    <form method="post" action="{{ url_for('logout') }}">
+      <button class="btn sm" type="submit">Sign out</button>
+    </form>
+  </div>
+
+  <div class="panel" style="margin-bottom:24px">
+    <h3>New instance</h3>
+    <div class="grid">
+      {% for key, gt in game_types.items() %}
+      <div class="card">
+        <h3>{{ gt.name }} <span class="tag">{{ gt.dimensions }}</span></h3>
+        <div class="meta" style="margin-top:6px">{{ gt.blurb }}</div>
+        <div class="row">
+          <a class="btn primary" href="{{ url_for('new_instance', game_type=key) }}">Customize &amp; deploy</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <h3 style="margin-bottom:14px">Your instances</h3>
+
+  {% if not instances %}
+    <div class="empty">Nothing deployed yet. Pick a game type above to build your first instance.</div>
+  {% else %}
+  <div class="grid">
+    {% for i in instances %}
+    <div class="card" data-id="{{ i.id }}">
+      <h3>{{ i.title }}</h3>
+      <div class="slug">/g/{{ i.slug }}</div>
+
+      <div class="swatches">
+        {% for c in i.config.brickColors[:8] %}<i style="background:{{ c }}"></i>{% endfor %}
+      </div>
+
+      <div class="meta">
+        {% if i.deployed %}<span class="tag live">live</span>{% else %}<span class="tag draft">draft</span>{% endif %}
+        {% if i.locked %}<span class="tag lock">password</span>{% else %}<span class="tag">open</span>{% endif %}
+        <span>{{ i.plays }} play{{ '' if i.plays == 1 else 's' }}</span>
+      </div>
+
+      <div class="row">
+        <a class="btn sm" href="{{ url_for('edit_instance', iid=i.id) }}">Edit</a>
+        {% if i.deployed %}
+          <a class="btn sm" href="{{ i.url }}" target="_blank" rel="noopener">Open</a>
+          <button class="btn sm" data-act="undeploy">Undeploy</button>
+        {% else %}
+          <button class="btn sm primary" data-act="deploy">Deploy</button>
+        {% endif %}
+        <button class="btn sm" data-act="copy">Copy link</button>
+        <button class="btn sm danger" data-act="delete">Delete</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-act]');
+  if(!btn) return;
+  const card = btn.closest('.card'), id = card.dataset.id;
+  const act = btn.dataset.act;
+
+  if(act === 'copy'){
+    const slug = card.querySelector('.slug').textContent.trim();
+    await navigator.clipboard.writeText(location.origin + slug);
+    const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = t, 1200);
+    return;
+  }
+  if(act === 'delete'){
+    if(!confirm('Delete this instance permanently? The deployed link stops working.')) return;
+    const r = await fetch('/api/instances/' + id, { method: 'DELETE' });
+    if(r.ok) card.remove(); else alert('Delete failed.');
+    return;
+  }
+  btn.disabled = true;
+  const r = await fetch('/api/instances/' + id + '/deploy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deployed: act === 'deploy' })
+  });
+  if(r.ok) location.reload(); else { alert('Failed.'); btn.disabled = false; }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Runtime state — never commit this.
+# data/arcade.db holds instances, password hashes and every recorded score;
+# data/secret_key signs sessions; data/uploads/ holds players' sprite images.
+data/
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# editor noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

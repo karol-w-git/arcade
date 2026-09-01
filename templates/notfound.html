@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Not found</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<div class="center">
+  <div class="auth">
+    <div class="card">
+      <h2>404</h2>
+      {% if undeployed %}
+        <p class="sub">This instance exists but is not deployed yet. Only you can see this message.</p>
+        <a class="btn primary" href="{{ url_for('edit_instance', iid=iid) }}">Open it in the editor</a>
+      {% else %}
+        <p class="sub">No game lives at this address.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+</body>
+</html>

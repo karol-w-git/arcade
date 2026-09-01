@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{
+    color:#e8ecf8; font:15px/1.4 system-ui,"Segoe UI",sans-serif;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    user-select:none;-webkit-user-select:none;touch-action:none;overflow:hidden;
+  }
+  /* animated background sits behind everything and never eats clicks */
+  #bgLayer{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  #bgLayer iframe{width:100%;height:100%;border:0;display:block}
+  /* lift page content above the background - but not #overlay, which must stay fixed */
+  body > *:not(#bgLayer):not(#overlay){position:relative;z-index:1}
+
+  #hud{display:flex;gap:26px;font-variant-numeric:tabular-nums;letter-spacing:.05em;font-size:14px}
+  #hud b{font-weight:600}
+  h1{font-size:16px;font-weight:600;margin:0;opacity:.75;letter-spacing:.02em}
+  #who{font-size:13px;opacity:.6;min-height:18px}
+  canvas{max-width:100vw;max-height:64vh;touch-action:none}
+  /* the frame is chrome only - without it the board bleeds into the background */
+  canvas.framed{border-radius:10px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 18px 60px -20px #000}
+  #help{font-size:12.5px;opacity:.45;text-align:center}
+
+  /* ---- overlays ---- */
+  #overlay{
+    position:fixed;inset:0;z-index:5;display:none;align-items:center;justify-content:center;
+    background:rgba(4,6,12,.72);backdrop-filter:blur(3px);padding:20px;
+  }
+  #overlay.on{display:flex}
+  .sheet{
+    width:100%;max-width:400px;background:#111629;border:1px solid #232c47;
+    border-radius:12px;padding:22px;box-shadow:0 30px 80px -30px #000;
+  }
+  .sheet h2{margin:0 0 4px;font-size:19px}
+  .sheet p{margin:0 0 16px;font-size:13.5px;opacity:.6}
+  .sheet input[type=text]{
+    width:100%;background:#0a0e1c;border:1px solid #232c47;color:#e8ecf8;
+    padding:10px 12px;border-radius:8px;font:inherit;box-sizing:border-box;
+  }
+  .sheet input:focus{outline:none;border-color:var(--accent,#4cc9f0)}
+  .btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .b{
+    flex:1;min-width:120px;background:#161d33;border:1px solid #232c47;color:#e8ecf8;
+    padding:10px 14px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer;
+  }
+  .b:hover{border-color:#3b4a76}
+  .b.primary{background:var(--accent,#4cc9f0);border-color:var(--accent,#4cc9f0);color:#04121a;font-weight:600}
+  .big{font-size:34px;font-weight:700;margin:6px 0 2px;color:var(--accent,#4cc9f0);
+       font-variant-numeric:tabular-nums}
+
+  /* ---- leaderboard ---- */
+  ol.board{list-style:none;margin:0 0 4px;padding:0;max-height:46vh;overflow-y:auto}
+  ol.board li{display:flex;align-items:baseline;gap:10px;padding:7px 2px;
+              border-bottom:1px solid #1b2338;font-size:14px}
+  ol.board li:last-child{border-bottom:0}
+  ol.board .rank{width:24px;opacity:.45;font-size:12.5px;text-align:right}
+  ol.board .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  ol.board .sc{font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent,#4cc9f0)}
+  ol.board .lv{opacity:.4;font-size:12px;width:44px;text-align:right}
+  ol.board li.me{background:rgba(255,255,255,.05);border-radius:6px}
+  .none{opacity:.5;font-size:13.5px;padding:14px 0}
+
+  /* ---- background presets ---- */
+  .preset-bg{position:absolute;inset:-10%}
+  .starfield{
+    background:
+      radial-gradient(1.6px 1.6px at 20% 30%, #fff, transparent),
+      radial-gradient(1.4px 1.4px at 70% 60%, #fff, transparent),
+      radial-gradient(1.8px 1.8px at 40% 80%, #fff, transparent),
+      radial-gradient(1.2px 1.2px at 85% 15%, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 10% 70%, #fff, transparent),
+      radial-gradient(1.3px 1.3px at 55% 20%, #fff, transparent);
+    background-size:340px 340px;opacity:.55;animation:drift 90s linear infinite;
+  }
+  .aurora{
+    background:
+      radial-gradient(50% 40% at 20% 30%, var(--a1,#4cc9f0) 0%, transparent 70%),
+      radial-gradient(45% 35% at 75% 60%, var(--a2,#f72585) 0%, transparent 70%),
+      radial-gradient(40% 30% at 50% 85%, var(--a3,#3ddc97) 0%, transparent 70%);
+    filter:blur(50px);opacity:.35;animation:sway 24s ease-in-out infinite alternate;
+  }
+  .scanlines{
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 4px);
+    animation:scan 8s linear infinite;
+  }
+  .drift{
+    background-image:linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+                     linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+    background-size:48px 48px;animation:drift 40s linear infinite;
+  }
+  @keyframes drift{ to{ background-position:340px 340px } }
+  @keyframes sway{ from{ transform:translate3d(-4%,-2%,0) scale(1) }
+                   to{ transform:translate3d(4%,3%,0) scale(1.15) } }
+  @keyframes scan{ to{ background-position:0 40px } }
+  @media (prefers-reduced-motion: reduce){ .preset-bg{ animation:none } }
+</style>
+</head>
+<body>
+<div id="bgLayer"></div>
+
+<h1>{{ title }}</h1>
+<div id="hud">
+  <span>SCORE <b id="score">0</b></span>
+  <span>LIVES <b id="lives">3</b></span>
+  <span>LEVEL <b id="level">1</b></span>
+</div>
+<div id="who"></div>
+<canvas id="c" width="640" height="720"></canvas>
+<div id="help">Move: mouse / arrows &middot; Launch: click or Space &middot; Pause: Esc &middot; <b>Scores: P</b></div>
+
+<div id="overlay"><div class="sheet" id="sheet"></div></div>
+
+{% for lib in meta.libs %}<script src="{{ url_for('static', filename=lib) }}"></script>
+{% endfor %}<script src="{{ url_for('static', filename=meta.engine) }}"></script>
+<script>
+let CONFIG = {{ config|tojson }};
+const PREVIEW = {{ 'true' if preview else 'false' }};
+const SLUG = {{ slug|tojson }};
+let TOKEN = {{ token|tojson }};
+let SCORES = {{ scores|tojson }};
+
+const ENGINE = {{ meta.engine.split('/')[-1].replace('.js','')|tojson }};
+const $ = id => document.getElementById(id);
+const makeGame = () => Arcade[ENGINE]($('c'), CONFIG, { onHud: hud, onGameOver: gameOver });
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+let game = null, player = '', lastScore = null, overlayMode = null;
+
+/* ---------------- background + chrome ---------------- */
+function paintChrome(cfg){
+  document.body.style.background = cfg.bgStyle === 'flat'
+    ? cfg.pageBg
+    : 'radial-gradient(circle at 50% -5%, ' + cfg.bg + ' 0%, ' + cfg.pageBg + ' 65%)';
+  document.body.style.color = cfg.paddleColor;
+  document.body.style.setProperty('--accent', cfg.accent);
+  $('c').classList.toggle('framed', cfg.frame !== false);
+  for(const id of ['score','lives','level']) $(id).style.color = cfg.accent;
+  paintBackground(cfg);
+}
+
+let lastBgKey = null;
+function paintBackground(cfg){
+  const key = [cfg.bgMode, cfg.bgPreset, cfg.bgMode === 'custom' ? cfg.bgHtml : '',
+               cfg.accent, cfg.brickColors[0], cfg.brickColors[5]].join('|');
+  if(key === lastBgKey) return;        // don't restart animations on every tweak
+  lastBgKey = key;
+  const layer = $('bgLayer');
+  layer.innerHTML = '';
+
+  if(cfg.bgMode === 'preset'){
+    const d = document.createElement('div');
+    d.className = 'preset-bg ' + cfg.bgPreset;
+    d.style.setProperty('--a1', cfg.accent);
+    d.style.setProperty('--a2', cfg.brickColors[0] || '#f72585');
+    d.style.setProperty('--a3', cfg.brickColors[5] || '#3ddc97');
+    layer.appendChild(d);
+  } else if(cfg.bgMode === 'custom' && cfg.bgHtml.trim()){
+    // Sandboxed: the pasted markup can animate, but it cannot reach this page,
+    // its cookies, or the network.
+    const f = document.createElement('iframe');
+    f.setAttribute('sandbox', '');
+    f.setAttribute('referrerpolicy', 'no-referrer');
+    f.srcdoc = '<!DOCTYPE html><meta charset="utf-8">' +
+      '<style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}</style>' +
+      cfg.bgHtml;
+    layer.appendChild(f);
+  }
+}
+
+/* ---------------- HUD ---------------- */
+const hud = s => {
+  $('score').textContent = s.score;
+  $('lives').textContent = s.lives;
+  $('level').textContent = s.level;
+};
+
+/* ---------------- overlays ---------------- */
+function closeOverlay(){
+  overlayMode = null;
+  $('overlay').classList.remove('on');
+  if(game){ game.setBlocked(false); game.resume(); }
+}
+function openOverlay(mode, html){
+  overlayMode = mode;
+  $('sheet').innerHTML = html;
+  $('overlay').classList.add('on');
+  if(game){ game.pause(); game.setBlocked(true); }
+}
+
+function boardHtml(highlight){
+  if(!SCORES.length) return '<div class="none">No scores yet. Be the first.</div>';
+  return '<ol class="board">' + SCORES.map((s, i) =>
+    '<li class="' + (highlight && s === highlight ? 'me' : '') + '">' +
+      '<span class="rank">' + (i + 1) + '</span>' +
+      '<span class="nm">' + esc(s.name) + '</span>' +
+      '<span class="lv">lv ' + s.level + '</span>' +
+      '<span class="sc">' + s.score + '</span>' +
+    '</li>').join('') + '</ol>';
+}
+
+function askName(){
+  openOverlay('name',
+    '<h2>Who’s playing?</h2>' +
+    '<p>Your score goes on the board under this name.</p>' +
+    '<input type="text" id="nameInput" maxlength="24" placeholder="Player name" autocomplete="off">' +
+    '<div class="btns">' +
+      '<button class="b primary" id="startBtn">Start</button>' +
+      '<button class="b" id="boardBtn">Scores (P)</button>' +
+    '</div>');
+  const input = $('nameInput');
+  input.value = player || '';
+  setTimeout(() => input.focus(), 30);
+  input.addEventListener('keydown', e => { if(e.key === 'Enter') begin(input.value); });
+  $('startBtn').onclick = () => begin(input.value);
+  $('boardBtn').onclick = () => showBoard();
+}
+
+function showBoard(){
+  openOverlay('board',
+    '<h2>High scores</h2>' +
+    '<p>' + (SCORES.length ? 'Top ' + SCORES.length + ' on this game.' : 'Nothing here yet.') + '</p>' +
+    boardHtml(lastScore) +
+    '<div class="btns"><button class="b primary" id="closeBtn">Back (P)</button></div>');
+  $('closeBtn').onclick = () => backFromBoard();
+}
+
+function backFromBoard(){
+  // At the name prompt P is a detour, not a pause - go back to the prompt.
+  if(!game || !player) askName();
+  else closeOverlay();
+}
+
+function gameOver(res){
+  lastScore = null;
+  const submit = SLUG ? postScore(res) : Promise.resolve();
+  openOverlay('over',
+    '<h2>Game over</h2>' +
+    '<p>' + esc(player || 'Player') + ' — level ' + res.level + '</p>' +
+    '<div class="big">' + res.score + '</div>' +
+    '<div id="rankLine" class="none">Saving…</div>' +
+    '<div class="btns">' +
+      '<button class="b primary" id="againBtn">Play again</button>' +
+      '<button class="b" id="nextBtn">Next player</button>' +
+      '<button class="b" id="boardBtn2">Scores (P)</button>' +
+    '</div>');
+  $('againBtn').onclick = () => { closeOverlay(); game.restart(CONFIG); };
+  $('nextBtn').onclick  = () => { player = ''; askName(); };
+  $('boardBtn2').onclick = () => showBoard();
+
+  submit.then(rank => {
+    const line = $('rankLine');
+    if(!line) return;
+    if(!SLUG) line.textContent = 'Preview — scores are not saved.';
+    else if(rank > 0) line.textContent = 'Rank #' + rank + ' of ' + SCORES.length + '.';
+    else line.textContent = 'Saved.';
+  });
+}
+
+async function postScore(res){
+  try{
+    const r = await fetch('/g/' + SLUG + '/scores', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN, name: player || 'Anonymous',
+                             score: res.score, level: res.level })
+    });
+    if(!r.ok) return 0;
+    const data = await r.json();
+    TOKEN = data.token;
+    SCORES = data.scores;
+    lastScore = SCORES.find(s => s.name === (player || 'Anonymous') && s.score === res.score) || null;
+    return lastScore ? SCORES.indexOf(lastScore) + 1 : 0;
+  } catch(_e){ return 0; }
+}
+
+/* ---------------- start / restart ---------------- */
+function begin(name){
+  player = (name || '').trim().slice(0, 24) || 'Anonymous';
+  $('who').textContent = 'Playing as ' + player;
+  closeOverlay();
+  if(game) game.restart(CONFIG);
+  else game = makeGame();
+  game.setBlocked(false);
+}
+
+/* P toggles the board from anywhere; Esc closes it too. */
+addEventListener('keydown', e => {
+  if(e.code === 'KeyP'){
+    e.preventDefault();
+    if(overlayMode === 'board') backFromBoard();
+    else if(overlayMode === 'over' || overlayMode === 'name' || overlayMode === null) showBoard();
+  }
+  if(e.code === 'Escape' && overlayMode === 'board'){ e.preventDefault(); backFromBoard(); }
+});
+
+paintChrome(CONFIG);
+
+if(PREVIEW || !CONFIG.askName){
+  // The editor preview plays immediately - no name gate in the way of design work.
+  player = PREVIEW ? 'Preview' : 'Anonymous';
+  if(!PREVIEW) $('who').textContent = 'Playing as ' + player;
+  game = makeGame();
+} else {
+  game = makeGame();
+  game.pause(); game.setBlocked(true);
+  askName();
+}
+
+if(PREVIEW){
+  // The editor drives this frame over postMessage; same-origin only.
+  addEventListener('message', e => {
+    if(e.origin !== location.origin) return;
+    const msg = e.data;
+    if(!msg || msg.type !== 'arcade:config') return;
+    CONFIG = Object.assign({}, CONFIG, msg.config);
+    paintChrome(CONFIG);
+    if(msg.restart) game.restart(CONFIG); else game.setConfig(CONFIG);
+  });
+  parent.postMessage({ type: 'arcade:ready' }, location.origin);
+}
+</script>
+</body>
+</html>

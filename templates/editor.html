@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ (instance.title if instance else 'New ' ~ meta.name) }} — Arcade</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <h1>{{ meta.name }}</h1>
+      <span>{{ 'editing ' ~ instance.slug if instance else 'new instance' }}</span>
+    </div>
+    <div class="row" style="display:flex;gap:8px">
+      <a class="btn sm" href="{{ url_for('dashboard') }}">&larr; Dashboard</a>
+      <span class="saving" id="saving"></span>
+    </div>
+  </div>
+
+  <div class="editor">
+    <div>
+      <div class="panel">
+        <h3>Instance</h3>
+        <div class="field">
+          <label for="title">Title</label>
+          <input type="text" id="title" value="{{ instance.title if instance else meta.name ~ ' instance' }}" maxlength="80">
+        </div>
+        <div class="field">
+          <label for="slug">Public address</label>
+          <input type="text" id="slug" value="{{ instance.slug if instance else '' }}" placeholder="auto from title">
+          <div class="hint">Plays at <code id="slugPreview">/g/…</code></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Colors</h3>
+        <div class="presets" style="margin-bottom:16px" id="presets"></div>
+        <div class="two">
+          <div class="field"><label for="pageBg">Page background</label><input type="color" id="pageBg"></div>
+          <div class="field"><label for="bg">Board background</label><input type="color" id="bg"></div>
+          <div class="field"><label for="accent">Accent / glow</label><input type="color" id="accent"></div>
+          <div class="field"><label for="paddleColor">Paddle</label><input type="color" id="paddleColor"></div>
+          <div class="field"><label for="ballColor">Ball</label><input type="color" id="ballColor"></div>
+        </div>
+        <div class="field">
+          <label>Brick palette</label>
+          <div class="palette" id="palette"></div>
+        </div>
+        <div class="field">
+          <label class="check"><input type="checkbox" id="grid"> Grid lines on the board</label>
+        </div>
+        <div class="field">
+          <label for="bgStyle">Page background style</label>
+          <select id="bgStyle">
+            <option value="radial">Radial glow</option>
+            <option value="flat">Flat</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Gameplay</h3>
+        <div class="two">
+          <div class="field"><label for="lives">Lives <b id="livesV"></b></label>
+            <input type="range" id="lives" min="1" max="9" step="1"></div>
+          <div class="field"><label for="ballSpeed">Ball speed <b id="ballSpeedV"></b></label>
+            <input type="range" id="ballSpeed" min="3" max="14" step="0.2"></div>
+          <div class="field"><label for="paddleWidth">Paddle width <b id="paddleWidthV"></b></label>
+            <input type="range" id="paddleWidth" min="50" max="260" step="5"></div>
+          <div class="field"><label for="level">Starting level</label>
+            <select id="level"><option value="0">1</option><option value="1">2</option>
+              <option value="2">3</option><option value="3">4</option></select></div>
+        </div>
+        <label class="check" style="margin-bottom:10px"><input type="checkbox" id="powerups"> Power-up drops</label>
+        <label class="check"><input type="checkbox" id="particles"> Debris burst when a brick breaks</label>
+        <div class="hint">Gameplay changes restart the preview.</div>
+      </div>
+
+      <div class="panel">
+        <h3>Background</h3>
+        <div class="field">
+          <label for="bgMode">Type</label>
+          <select id="bgMode">
+            <option value="color">Plain colors only</option>
+            <option value="preset">Animated preset</option>
+            <option value="custom">Custom HTML / CSS</option>
+          </select>
+        </div>
+        <label class="check" style="margin-bottom:14px">
+          <input type="checkbox" id="frame"> Frame around the play area
+        </label>
+        <div class="field">
+          <label for="boardAlpha">Board opacity <b id="boardAlphaV"></b></label>
+          <input type="range" id="boardAlpha" min="0" max="1" step="0.05">
+          <div class="hint">Turn it down to let the background show through the play area.</div>
+        </div>
+        {% if 'tiltX' in config %}
+        <div class="two">
+          <div class="field"><label for="tiltX">Tilt back <b id="tiltXV"></b></label>
+            <input type="range" id="tiltX" min="-0.6" max="0.6" step="0.01"></div>
+          <div class="field"><label for="tiltY">Tilt aside <b id="tiltYV"></b></label>
+            <input type="range" id="tiltY" min="-0.6" max="0.6" step="0.01"></div>
+        </div>
+        {% endif %}
+        <div class="field" id="presetRow">
+          <label for="bgPreset">Preset</label>
+          <select id="bgPreset">
+            <option value="starfield">Drifting starfield</option>
+            <option value="aurora">Aurora blobs</option>
+            <option value="scanlines">CRT scanlines</option>
+            <option value="drift">Drifting grid</option>
+          </select>
+          <div class="hint">Presets tint themselves from your accent and palette.</div>
+        </div>
+        <div class="field" id="htmlRow">
+          <label for="bgHtml">Markup</label>
+          <textarea id="bgHtml" rows="7" spellcheck="false"
+                    placeholder="&lt;style&gt; … &lt;/style&gt;&lt;div class=&quot;blob&quot;&gt;&lt;/div&gt;"></textarea>
+          <div class="hint">
+            Paste anything self-contained — a Claude Design export, an SVG, a CSS animation.
+            It runs in a sandboxed frame behind the board: no scripts of yours are trusted with
+            the page, and it cannot make network calls. Max 20 000 characters.
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Sprites</h3>
+        <div class="hint" style="margin:-6px 0 14px">
+          PNG / JPG / GIF / WebP, up to 512 KB each. Empty slots keep the drawn shapes.
+          Animated GIFs do not animate on canvas — use the background for motion.
+        </div>
+        <div class="sprites" id="sprites"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Players &amp; scores</h3>
+        <label class="check" style="margin-bottom:10px">
+          <input type="checkbox" id="askName"> Ask each player for a name
+        </label>
+        <label class="check"><input type="checkbox" id="scoreboard"> Keep a high-score list</label>
+        <div class="hint">Players open the list with <b>P</b>; pause moved to <b>Esc</b>.</div>
+        {% if instance %}
+        <div id="scoreBox" style="margin-top:14px">
+          {% if scores %}
+          <ol class="board-mini">
+            {% for s in scores[:10] %}
+            <li><span>{{ loop.index }}</span><b>{{ s.name }}</b><i>lv {{ s.level }}</i><em>{{ s.score }}</em></li>
+            {% endfor %}
+          </ol>
+          <button class="btn sm danger" id="clearScores" style="margin-top:10px">Clear scores</button>
+          {% else %}
+          <div class="hint">No scores recorded yet.</div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <h3>Password lock</h3>
+        {% if instance and instance.locked %}
+          <div class="meta" style="margin:0 0 12px"><span class="tag lock">password set</span></div>
+        {% endif %}
+        <div class="field">
+          <label for="password">{{ 'New password (leave blank to keep current)' if instance and instance.locked else 'Player password' }}</label>
+          <input type="password" id="password" autocomplete="new-password" placeholder="{{ 'unchanged' if instance and instance.locked else 'leave blank for an open game' }}">
+          <div class="hint">Players must enter this before the game loads.</div>
+        </div>
+        {% if instance and instance.locked %}
+        <label class="check"><input type="checkbox" id="clearPassword"> Remove the password (make it public)</label>
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <h3>Publish</h3>
+        <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="save">Save draft</button>
+          <button class="btn primary" id="deploy">Save &amp; deploy</button>
+          {% if instance and instance.deployed %}
+          <a class="btn" href="{{ instance.url }}" target="_blank" rel="noopener">Open live</a>
+          {% endif %}
+        </div>
+        <div class="hint" id="publishHint">
+          {% if instance and instance.deployed %}Live now.{% else %}Not deployed — the public address 404s until you deploy.{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stagebar">
+        <span class="saving">Live preview</span>
+        <button class="btn sm" id="restart">Restart preview</button>
+      </div>
+      <iframe id="preview" src="{{ url_for('preview', game_type=game_type) }}" title="Preview"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+const INSTANCE_ID = {{ instance.id if instance else 'null' }};
+const GAME_TYPE = {{ game_type|tojson }};
+const SPRITE_SLOTS = {{ sprite_slots|tojson }};
+const SLOT_LABELS = {
+  paddle:'Paddle', ball:'Ball', brick1:'Brick (1 hit)', brick2:'Brick (2 hits)',
+  brick3:'Brick (3 hits)', brickSolid:'Unbreakable brick', powerupWide:'Power-up: wide',
+  powerupMulti:'Power-up: multiball', powerupSlow:'Power-up: slow', powerupLife:'Power-up: life',
+  boardBg:'Board background image'
+};
+let config = {{ config|tojson }};
+config.sprites = config.sprites || {};
+
+const $ = id => document.getElementById(id);
+const COLOR_KEYS = ['pageBg','bg','accent','paddleColor','ballColor'];
+const NUM_KEYS = ['lives','ballSpeed','paddleWidth','boardAlpha'];
+const PRESETS = {
+  'Midnight':  { pageBg:'#0a0c14', bg:'#05070f', accent:'#4cc9f0', paddleColor:'#e8ecf8', ballColor:'#e8ecf8',
+                 brickColors:['#f72585','#b5179e','#7209b7','#4361ee','#4cc9f0','#3ddc97','#ffd166','#ff8c42'] },
+  'Sunset':    { pageBg:'#1a0f1c', bg:'#241026', accent:'#ff8c42', paddleColor:'#ffe6c7', ballColor:'#ffd166',
+                 brickColors:['#ff8c42','#ff5d73','#f72585','#c1121f','#ffd166','#ffb703','#e85d04','#9d0208'] },
+  'Mono':      { pageBg:'#0d0d0d', bg:'#000000', accent:'#ffffff', paddleColor:'#ffffff', ballColor:'#ffffff',
+                 brickColors:['#ffffff','#d4d4d4','#a3a3a3','#737373','#525252','#404040','#8a8a8a','#bfbfbf'] },
+  'Forest':    { pageBg:'#08150f', bg:'#04100b', accent:'#3ddc97', paddleColor:'#d8f3dc', ballColor:'#95d5b2',
+                 brickColors:['#3ddc97','#2d6a4f','#40916c','#52b788','#74c69d','#95d5b2','#b7e4c7','#1b4332'] },
+  'Vaporwave': { pageBg:'#120a24', bg:'#1a0b33', accent:'#ff71ce', paddleColor:'#ff71ce', ballColor:'#01cdfe',
+                 brickColors:['#ff71ce','#01cdfe','#05ffa1','#b967ff','#fffb96','#ff6ec7','#7a5cff','#00e5ff'] },
+  'Paper':     { pageBg:'#f2efe6', bg:'#fbf9f3', accent:'#c1121f', paddleColor:'#22223b', ballColor:'#22223b',
+                 brickColors:['#c1121f','#e07a5f','#3d405b','#81b29a','#f2cc8f','#7f5539','#264653','#e76f51'] }
+};
+
+// ---- build palette + preset swatches ----
+const paletteEl = $('palette');
+for(let i = 0; i < 8; i++){
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.dataset.brick = i;
+  inp.addEventListener('input', onChange);
+  paletteEl.appendChild(inp);
+}
+for(const [name, p] of Object.entries(PRESETS)){
+  const b = document.createElement('button');
+  b.className = 'preset'; b.title = name;
+  b.style.background = `linear-gradient(135deg, ${p.brickColors[0]} 0%, ${p.accent} 50%, ${p.bg} 100%)`;
+  b.onclick = () => { Object.assign(config, JSON.parse(JSON.stringify(p))); toForm(); push(true); };
+  $('presets').appendChild(b);
+}
+
+// ---- sprite slots ----
+const spritesEl = $('sprites');
+for(const slot of SPRITE_SLOTS){
+  const row = document.createElement('div');
+  row.className = 'sprite';
+  row.innerHTML =
+    '<div class="thumb" data-thumb="' + slot + '"></div>' +
+    '<div class="sprite-main">' +
+      '<span class="sprite-name">' + (SLOT_LABELS[slot] || slot) + '</span>' +
+      '<div class="sprite-btns">' +
+        '<label class="btn sm">Upload<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" ' +
+          'data-slot="' + slot + '" hidden></label>' +
+        '<button class="btn sm danger" data-clear="' + slot + '" hidden>Remove</button>' +
+      '</div>' +
+    '</div>';
+  spritesEl.appendChild(row);
+}
+
+function paintSprites(){
+  for(const slot of SPRITE_SLOTS){
+    const url = config.sprites[slot];
+    const thumb = spritesEl.querySelector('[data-thumb="' + slot + '"]');
+    const clear = spritesEl.querySelector('[data-clear="' + slot + '"]');
+    thumb.style.backgroundImage = url ? 'url("' + url + '?v=' + (config._v || 0) + '")' : '';
+    thumb.classList.toggle('empty', !url);
+    clear.hidden = !url;
+  }
+}
+
+spritesEl.addEventListener('change', async e => {
+  const input = e.target.closest('input[type=file]');
+  if(!input || !input.files.length) return;
+  const slot = input.dataset.slot, file = input.files[0];
+  input.value = '';
+
+  if(!currentId){                      // uploads need somewhere to live
+    say('Saving draft first…');
+    if(!await save()) return;
+  }
+  const fd = new FormData();
+  fd.append('slot', slot);
+  fd.append('file', file);
+  say('Uploading…');
+  const r = await fetch('/api/instances/' + currentId + '/sprite', { method: 'POST', body: fd });
+  const data = await r.json().catch(() => ({}));
+  if(!r.ok){ say(''); alert(data.error || 'Upload failed.'); return; }
+  config.sprites[slot] = data.url;
+  config._v = data.cache_key;          // busts the browser cache on replace
+  paintSprites();
+  push(true);
+  await save();
+  say('Sprite saved.');
+});
+
+spritesEl.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-clear]');
+  if(!btn) return;
+  const slot = btn.dataset.clear;
+  if(currentId) await fetch('/api/instances/' + currentId + '/sprite/' + slot, { method: 'DELETE' });
+  delete config.sprites[slot];
+  paintSprites();
+  push(true);
+  if(currentId) await save();
+});
+
+// ---- form <-> config ----
+function toForm(){
+  for(const k of COLOR_KEYS) $(k).value = config[k];
+  [...paletteEl.children].forEach((inp, i) => inp.value = config.brickColors[i] || '#888888');
+  $('grid').checked = !!config.grid;
+  $('powerups').checked = !!config.powerups;
+  $('particles').checked = !!config.particles;
+  $('frame').checked = config.frame !== false;
+  $('askName').checked = !!config.askName;
+  $('scoreboard').checked = !!config.scoreboard;
+  $('bgStyle').value = config.bgStyle || 'radial';
+  $('bgMode').value = config.bgMode || 'color';
+  $('bgPreset').value = config.bgPreset || 'starfield';
+  $('bgHtml').value = config.bgHtml || '';
+  $('level').value = String(config.level || 0);
+  for(const k of NUM_KEYS){ $(k).value = config[k]; $(k + 'V').textContent = config[k]; }
+  showAlpha();
+  syncTilt();
+  syncBgRows();
+  paintSprites();
+  updateSlugPreview();
+}
+
+function fromForm(){
+  for(const k of COLOR_KEYS) config[k] = $(k).value;
+  config.brickColors = [...paletteEl.children].map(i => i.value);
+  config.grid = $('grid').checked;
+  config.powerups = $('powerups').checked;
+  config.particles = $('particles').checked;
+  config.frame = $('frame').checked;
+  config.askName = $('askName').checked;
+  config.scoreboard = $('scoreboard').checked;
+  config.bgStyle = $('bgStyle').value;
+  config.bgMode = $('bgMode').value;
+  config.bgPreset = $('bgPreset').value;
+  config.bgHtml = $('bgHtml').value.slice(0, 20000);
+  config.level = +$('level').value;
+  config.lives = +$('lives').value;
+  config.ballSpeed = +$('ballSpeed').value;
+  config.paddleWidth = +$('paddleWidth').value;
+  config.boardAlpha = +$('boardAlpha').value;
+  for(const k of NUM_KEYS) $(k + 'V').textContent = config[k];
+  showAlpha();
+  readTilt();
+  syncBgRows();
+}
+
+const HAS_TILT = 'tiltX' in config;
+function syncTilt(){
+  if(!HAS_TILT) return;
+  $('tiltX').value = config.tiltX; $('tiltY').value = config.tiltY;
+  $('tiltXV').textContent = Math.round(config.tiltX * 57) + '°';
+  $('tiltYV').textContent = Math.round(config.tiltY * 57) + '°';
+}
+function readTilt(){
+  if(!HAS_TILT) return;
+  config.tiltX = +$('tiltX').value; config.tiltY = +$('tiltY').value;
+  $('tiltXV').textContent = Math.round(config.tiltX * 57) + '°';
+  $('tiltYV').textContent = Math.round(config.tiltY * 57) + '°';
+}
+
+function showAlpha(){ $('boardAlphaV').textContent = Math.round(config.boardAlpha * 100) + '%'; }
+
+function syncBgRows(){
+  $('presetRow').style.display = $('bgMode').value === 'preset' ? '' : 'none';
+  $('htmlRow').style.display   = $('bgMode').value === 'custom' ? '' : 'none';
+}
+
+if($('clearScores')) $('clearScores').onclick = async () => {
+  if(!confirm('Delete every recorded score for this game?')) return;
+  const r = await fetch('/api/instances/' + currentId + '/scores', { method: 'DELETE' });
+  if(r.ok) $('scoreBox').innerHTML = '<div class="hint">No scores recorded yet.</div>';
+};
+
+// Gameplay params only take effect on a fresh game, so those inputs force a restart.
+const RESTART_ON = new Set(['lives', 'ballSpeed', 'paddleWidth', 'level', 'powerups', 'particles']);
+function onChange(e){
+  fromForm();
+  push(e && RESTART_ON.has(e.target.id));
+}
+document.querySelectorAll('.panel input, .panel select, .panel textarea').forEach(el => {
+  if(el.id === 'password' || el.id === 'clearPassword') return;
+  if(el.type === 'file') return;                    // handled by the sprite uploader
+  el.addEventListener('input', onChange);
+  if(el.tagName === 'SELECT') el.addEventListener('change', onChange);
+});
+
+function push(restart){
+  const frame = $('preview').contentWindow;
+  if(frame) frame.postMessage({ type: 'arcade:config', config, restart: !!restart }, '*');
+}
+$('preview').addEventListener('load', () => push(true));
+$('restart').onclick = () => push(true);
+
+// ---- slug ----
+const slugify = s => (s || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+function updateSlugPreview(){
+  const s = slugify($('slug').value || $('title').value) || 'game';
+  $('slugPreview').textContent = location.origin + '/g/' + s;
+}
+$('title').addEventListener('input', updateSlugPreview);
+$('slug').addEventListener('input', updateSlugPreview);
+
+// ---- save ----
+let currentId = INSTANCE_ID;
+function say(msg){ $('saving').textContent = msg; if(msg) setTimeout(() => { if($('saving').textContent === msg) $('saving').textContent = ''; }, 2500); }
+
+async function save(deployed){
+  fromForm();
+  const body = {
+    game_type: GAME_TYPE,
+    title: $('title').value.trim() || 'Untitled game',
+    slug: $('slug').value.trim() || undefined,
+    config,
+    password: $('password').value || undefined,
+    clear_password: $('clearPassword') ? $('clearPassword').checked : false
+  };
+  if(deployed !== undefined) body.deployed = deployed;
+
+  say('Saving…');
+  const r = await fetch(currentId ? '/api/instances/' + currentId : '/api/instances', {
+    method: currentId ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if(!r.ok){ say(''); alert('Save failed (' + r.status + ').'); return null; }
+  const data = await r.json();
+  currentId = data.id;
+  $('slug').value = data.slug;
+  $('password').value = '';
+  updateSlugPreview();
+  history.replaceState({}, '', '/edit/' + data.id);
+  return data;
+}
+
+$('save').onclick = async () => { const d = await save(); if(d) say('Draft saved.'); };
+$('deploy').onclick = async () => {
+  const d = await save(true);
+  if(!d) return;
+  say('Deployed.');
+  $('publishHint').innerHTML = 'Live at <a href="' + d.url + '" target="_blank" rel="noopener">' +
+    location.origin + d.url + '</a>' + (d.locked ? ' — password protected.' : ' — open to anyone with the link.');
+};
+
+toForm();
+</script>
+</body>
+</html>
