@@ -17,18 +17,40 @@ python app.py
 
 Then open http://127.0.0.1:5000. Stack is Flask + SQLite from the stdlib — no `pip install` needed.
 
+For development, run with auto-reload so template and code edits show up on
+refresh (without it Flask caches templates until you restart):
+
+```powershell
+$env:ARCADE_DEBUG = "1"; python app.py
+```
+
 ### Environment
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `ARCADE_ADMIN_PASSWORD` | `admin` | Dashboard login. **Set this before hosting anywhere.** |
-| `ARCADE_SECRET_KEY` | generated into `data/secret_key` | Session signing key |
+| `ARCADE_ADMIN_PASSWORD` | `admin` | Dashboard login. **Required in prod.** |
+| `ARCADE_SECRET_KEY` | generated into `data/secret_key` | Session signing key. **Required in prod** - without it every restart logs everyone out. |
 | `PORT` | `5000` | Listen port |
-| `ARCADE_DEBUG` | unset | Flask debug reloader |
+| `ARCADE_DEBUG` | unset | Auto-reload + Flask debugger. Never in prod. |
+| `ARCADE_PROD` | unset | Serve with waitress on 0.0.0.0, https-only cookies, trust one proxy hop. |
+| `ARCADE_BEHIND_PROXY` | follows `ARCADE_PROD` | Trust `X-Forwarded-*` from one hop (Caddy/nginx). |
 
-```powershell
-$env:ARCADE_ADMIN_PASSWORD = "something-long"; python app.py
+In prod mode the app **refuses to start** if the admin password is still the
+default or the secret key is unset, rather than quietly serving an open dashboard.
+
+### Deployment
+
+```bash
+pip install -r requirements.txt
+ARCADE_PROD=1 ARCADE_ADMIN_PASSWORD=... ARCADE_SECRET_KEY=... PORT=8080 python app.py
 ```
+
+Put TLS in front of it (Caddy is the least work). The player password is only as
+private as the connection carrying it.
+
+Everything mutable lives in `data/` - the SQLite database, the session key and
+uploaded sprites - and that directory is gitignored. Back it up; it is the only
+copy of your instances and scores.
 
 ## Flow
 
