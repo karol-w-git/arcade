@@ -131,16 +131,36 @@ Then open `https://<your-host>` and sign in.
 The VM starts with an empty database. Either rebuild your instances through the
 dashboard, or copy the local ones up **once**:
 
-Base64 the database over the SSH channel - no scp, so it works through the IAP
-tunnel:
+Send it through a private bucket. (Base64 over the SSH command line works only
+for tiny files - Windows caps a command line at ~32 KB, and a 44 KB database is
+already 60 KB encoded.)
 
-```powershell
-$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("datarcade.db"))
-$restore = "echo $b64 | base64 -d > /tmp/arcade.db && sudo systemctl stop arcade && sudo cp /tmp/arcade.db /opt/arcade/app/data/arcade.db && sudo chown arcade:arcade /opt/arcade/app/data/arcade.db && sudo systemctl start arcade"
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command $restore
+```bash
+gcloud storage buckets create gs://arcade-backups-kw --project=arcade-games-kw --location=us-central1 --uniform-bucket-level-access
 ```
 
-Sprites (if you uploaded any) travel the same way as a tar archive.
+```bash
+gcloud storage cp data/arcade.db gs://arcade-backups-kw/restore/arcade.db --project=arcade-games-kw
+```
+
+Let the VM's service account read it, then pull it down and swap it in:
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://arcade-backups-kw "--member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" "--role=roles/storage.objectViewer" --project=arcade-games-kw
+```
+
+```powershell
+$c = "gcloud storage cp gs://arcade-backups-kw/restore/arcade.db /tmp/arcade.db && sudo systemctl stop arcade && sudo cp /tmp/arcade.db /opt/arcade/app/data/arcade.db && sudo chown arcade:arcade /opt/arcade/app/data/arcade.db && sudo systemctl start arcade"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command $c
+```
+
+Delete the copy afterwards - it contains password hashes:
+
+```bash
+gcloud storage rm gs://arcade-backups-kw/restore/arcade.db --project=arcade-games-kw
+```
+
+Sprites travel the same way, as a tar of `data/uploads`.
 
 After this, **treat the VM as the source of truth** — it accumulates real scores
 you cannot recreate. Copy down, never up.
@@ -159,16 +179,22 @@ Ship when you're happy:
 git add -A; git commit -m "what changed"; git push
 ```
 
-```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="cd /opt/arcade/app && sudo git pull && sudo systemctl restart arcade"
+```powershell
+$c = "cd /opt/arcade/app && sudo git pull -q && sudo chown -R arcade:arcade /opt/arcade/app && sudo systemctl restart arcade && sleep 3 && systemctl is-active arcade"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command $c
 ```
+
+> The first pull fails with *"dubious ownership"* - root pulling a checkout owned
+> by the `arcade` user. `setup-vm.sh` now marks the path safe; on a box installed
+> before that, run once:
+> `sudo git config --global --add safe.directory /opt/arcade/app`
 
 Re-running `setup-vm.sh` does the same thing plus dependency updates, and leaves
 `data/` and the secrets untouched. After the first install, run it from the
 checkout so you always get the current version of the script:
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="sudo bash /opt/arcade/app/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="sudo bash /opt/arcade/app/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 35-188-197-255.nip.io"
 ```
 
 ## 7. Backups (worth doing once players exist)

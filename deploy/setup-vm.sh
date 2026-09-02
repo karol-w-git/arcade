@@ -37,6 +37,9 @@ id -u arcade >/dev/null 2>&1 || useradd --system --home /opt/arcade --shell /usr
 mkdir -p /opt/arcade
 
 echo "==> code"
+# The checkout is owned by the arcade user but git runs here as root, which git
+# refuses ("dubious ownership") unless the path is marked safe.
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
 if [ -d "$APP_DIR/.git" ]; then
   BRANCH="$(git -C "$APP_DIR" symbolic-ref --short HEAD)"
   git -C "$APP_DIR" fetch --quiet origin "$BRANCH"
