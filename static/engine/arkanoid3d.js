@@ -567,6 +567,11 @@ function arkanoid3d(canvas, userConfig, opts){
 
       if(k.hp !== Infinity){
         k.hp--;
+        if(k.sup && k.hp > 0){
+          k.punch = performance.now();          // drives the scale kick + flash
+          burst(k, 0.6);                        // chips fly off the cube
+          shake = Math.max(shake, 13);          // and the room notices
+        }
         if(k.hp <= 0){
           burst(k);
           board.remove(k.mesh); k.mesh.material.dispose();
@@ -609,8 +614,13 @@ function arkanoid3d(canvas, userConfig, opts){
     for(const k of bricks){
       if(!k.sup) continue;
       const w = Date.now() / 1000;
-      k.mesh.rotation.y = Math.sin(w * 0.6) * 0.22;   // small: the hitbox stays square
-      k.mesh.rotation.x = Math.sin(w * 0.45) * 0.12;
+      const punch = k.punch ? clamp(1 - (performance.now() - k.punch) / 260, 0, 1) : 0;
+      k.mesh.rotation.y = Math.sin(w * 0.6) * 0.22 + (Math.random() - 0.5) * 0.12 * punch;
+      k.mesh.rotation.x = Math.sin(w * 0.45) * 0.12 + (Math.random() - 0.5) * 0.12 * punch;
+      // swell and flash on impact, settling back over ~260ms
+      k.mesh.scale.setScalar(1 + 0.13 * punch);
+      const acc = new THREE.Color(cfg.accent);
+      k.mesh.material.emissive = acc.clone().multiplyScalar(0.35 + 0.9 * punch);
     }
 
     // the tilt breathes a little so the depth reads, plus a knock on impact

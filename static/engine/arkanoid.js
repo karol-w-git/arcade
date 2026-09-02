@@ -404,6 +404,11 @@ function hitBricks(b){
 
       if(k.hp !== Infinity){
         k.hp--;
+        if(k.sup && k.hp > 0){
+          k.punch = performance.now();          // drives the squash + flash
+          burst(k, cfg.accent, 0.6);            // chips fly off the cube
+          shake = Math.max(shake, 13);          // and the room notices
+        }
         if(k.hp <= 0){
           burst(k, pal2(k));
           bricks.splice(i, 1);
@@ -442,7 +447,18 @@ function hitBricks(b){
     const face = darken(cfg.accent, wear * 0.4);
     const img = sprite('brickSuper');
 
+    // 0..1, decaying over ~260ms after a hit
+    const punch = k.punch ? clamp(1 - (performance.now() - k.punch) / 260, 0, 1) : 0;
+
     ctx.save();
+    if(punch > 0){
+      // squash on impact, about its own centre, so the hitbox is untouched
+      const cx = k.x + k.w / 2, cy = k.y + k.h / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(1 + 0.10 * punch, 1 - 0.07 * punch);
+      ctx.rotate((Math.random() - 0.5) * 0.04 * punch);
+      ctx.translate(-cx, -cy);
+    }
     ctx.shadowColor = cfg.accent;
     ctx.shadowBlur = 18 + Math.sin(t) * 7;       // a slow pulse: this is the target
 
@@ -472,6 +488,11 @@ function hitBricks(b){
     }
     ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2;
     roundRect(k.x + 1, k.y + 1, k.w - 2, k.h - 2, 5); ctx.stroke();
+
+    if(punch > 0){                               // white flash over the whole face
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * punch) + ')';
+      roundRect(k.x, k.y, k.w, k.h, 5); ctx.fill();
+    }
 
     // remaining hits, as pips along the bottom edge
     const n = k.maxHp || 1, pr = 4, gapx = 14;
