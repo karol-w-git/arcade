@@ -197,24 +197,87 @@ checkout so you always get the current version of the script:
 gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="sudo bash /opt/arcade/app/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 35-188-197-255.nip.io"
 ```
 
-## 7. Backups (worth doing once players exist)
+## 7. Backups
+
+What is worth saving is one file: `data/arcade.db`. The code is on GitHub and the
+VM is rebuildable in minutes; the database holds every instance and every score
+and exists nowhere else. `deploy/backup.sh` snapshots it with `sqlite3 .backup`
+(never `cp` - copying a live SQLite file can catch a half-written transaction),
+tars it with `data/uploads`, and puts it in a bucket.
 
 ```bash
-gcloud storage buckets create gs://arcade-backups-kw --location=us-central1 --project=arcade-games-kw
+gcloud storage buckets create gs://arcade-backups-kw --project=arcade-games-kw --location=us-central1 --uniform-bucket-level-access
+```
+
+**Two independent gates control whether the VM may write there**, and both must
+allow it:
+
+1. **IAM** - who may write. `objectCreator`, not admin: the VM can add backups but
+   cannot delete or overwrite them, so a broken or compromised box cannot destroy
+   your history.
+
+   ```bash
+   gcloud storage buckets add-iam-policy-binding gs://arcade-backups-kw "--member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" "--role=roles/storage.objectCreator" --project=arcade-games-kw
+   ```
+
+2. **Instance scopes** - the ceiling on what this VM's identity may ever do. GCE
+   defaults to `devstorage.read_only`, so writes fail with *"Provided scope(s) are
+   not authorized"* however generous IAM is. Changing scopes needs the VM stopped
+   (~40 s; a reserved IP means the hostname survives):
+
+   ```bash
+   gcloud compute instances stop arcade --zone=us-central1-a --project=arcade-games-kw
+   ```
+
+   ```bash
+   gcloud compute instances set-service-account arcade --zone=us-central1-a --project=arcade-games-kw "--scopes=https://www.googleapis.com/auth/devstorage.read_write,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append"
+   ```
+
+   ```bash
+   gcloud compute instances start arcade --zone=us-central1-a --project=arcade-games-kw
+   ```
+
+   Afterwards, **clear gcloud's cached token on the VM** or it keeps presenting one
+   minted under the old scopes and the write still fails:
+   `sudo rm -f /root/.config/gcloud/access_tokens.db /root/.config/gcloud/credentials.db`
+
+Schedule it nightly at 03:00 UTC in root's crontab. Absolute paths matter - cron
+runs with a bare environment and does not read a shell profile:
+
+```
+0 3 * * * /bin/bash /opt/arcade/app/deploy/backup.sh gs://arcade-backups-kw >> /var/log/arcade-backup.log 2>&1
+```
+
+Prove it survives that environment before trusting it:
+
+```bash
+sudo env -i /bin/bash /opt/arcade/app/deploy/backup.sh gs://arcade-backups-kw
+```
+
+Keep 30 days and let old ones expire, so the bucket cannot grow without bound:
+
+```bash
+gcloud storage buckets update gs://arcade-backups-kw --lifecycle-file=lifecycle.json --project=arcade-games-kw
+```
+
+```json
+{ "lifecycle": { "rule": [ { "action": {"type": "Delete"}, "condition": {"age": 30} } ] } }
+```
+
+### Restoring
+
+An untested backup is not a backup. To check one, or to recover:
+
+```bash
+gcloud storage cp gs://arcade-backups-kw/arcade-YYYYMMDD-HHMMSS.tar.gz . --project=arcade-games-kw
 ```
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="sudo bash ~/deploy/backup.sh gs://arcade-backups-kw"
+tar -xzf arcade-*.tar.gz && python -c "import sqlite3; print(sqlite3.connect('arcade.db').execute('PRAGMA integrity_check').fetchone())"
 ```
 
-Nightly at 03:00, via root's crontab on the VM:
-
-```
-0 3 * * * bash /home/YOUR_USER/deploy/backup.sh gs://arcade-backups-kw >> /var/log/arcade-backup.log 2>&1
-```
-
-The VM's service account needs write access to the bucket — grant it with
-`roles/storage.objectCreator` if the first run is denied.
+Put it back with the same swap used in step 5, then check the log occasionally:
+`sudo tail /var/log/arcade-backup.log`.
 
 ## Operating it
 
