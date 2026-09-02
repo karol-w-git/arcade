@@ -96,8 +96,13 @@ Time limit (15 s - 10 min) and the cube's hit count (1-20) are per instance, as
 are the cube's **colour** (or "follow accent"), the **logo size** on its faces,
 and the **thickness and colour** of the hit segments. **Damage darkening** (Colors
 panel) sets how far any brick dims as it is worn down - 0 keeps every brick at
-full colour - and **Text** sets the page text colour, which used to borrow the
-paddle colour and was unreadable on light themes.
+full colour - Hits show as dots spaced around the cube's border.
+
+A **Text** panel holds the two text colours: **body text** (titles, help line,
+player name) and **accented text** (scores, clock, prompts). Accented text used to
+be tied to Accent / glow, but that is a lighting colour - a glow that looks right
+is not necessarily readable as text - so the two are now independent. Both accept
+"follow" so existing instances are unchanged.
 Power-ups default to off; a checkbox brings them back. Classic mode is unchanged
 and still the default.
 

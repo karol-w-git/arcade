@@ -28,6 +28,7 @@ const DEFAULTS = {
   superColor: '',   // '' follows the accent
   pipSize: 6,       // thickness of the hit segments, in board px
   pipColor: '#ffffff',
+  accentTextColor: '',   // '' follows the accent
   logoScale: 80,    // % of the cube face the logo covers
   damageDarken: 0.32,
   level: 0,         // starting level index
@@ -128,6 +129,7 @@ function arkanoid(cv, userConfig, opts){
 
   const digMode = () => cfg.mode === 'dig';
   const superCol = () => cfg.superColor || cfg.accent;
+  const textCol = () => cfg.accentTextColor || cfg.accent;
   const dmg = () => clamp(cfg.damageDarken === undefined ? 0.32 : +cfg.damageDarken, 0, 0.8);
 
   function makeBricks(idx){
@@ -507,15 +509,15 @@ function hitBricks(b){
       ctx.restore();
     }
 
-    // Remaining hits, drawn as segments of the cube's own border rather than
-    // pips on its face - the face belongs to the logo.
+    // Remaining hits, as dots spaced around the cube's border - the face is
+    // left to the logo, and circles read more cleanly than bars.
     const n = k.maxHp || 1;
-    const inset = Math.max(3, k.w * 0.045);
+    const pr = clamp(+cfg.pipSize || 6, 1, 14);
+    const inset = pr + 2;                        // keeps every dot inside the cube
     const bx = k.x + inset, by = k.y + inset;
     const bw = k.w - inset * 2, bh = k.h - inset * 2;
     const perim = 2 * (bw + bh), seg = perim / n;
-    // walk the border clockwise from the top-left corner
-    const at = dist => {
+    const at = dist => {                         // walk the border clockwise
       let d = ((dist % perim) + perim) % perim;
       if(d < bw) return [bx + d, by];
       d -= bw;
@@ -525,19 +527,18 @@ function hitBricks(b){
       d -= bw;
       return [bx, by + bh - d];
     };
-    ctx.lineWidth = clamp(+cfg.pipSize || 6, 1, 14);
-    ctx.lineCap = 'butt';
     const lit = cfg.pipColor || '#ffffff';
     for(let i = 0; i < n; i++){
-      const gap = Math.min(seg * 0.18, 4);
-      ctx.strokeStyle = i < k.hp ? lit : 'rgba(0,0,0,.5)';
+      const [px, py] = at((i + 0.5) * seg);
       ctx.beginPath();
-      const steps = 6;                       // sampled, so a segment can turn a corner
-      for(let t = 0; t <= steps; t++){
-        const [px, py] = at(i * seg + gap / 2 + (seg - gap) * (t / steps));
-        t ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fillStyle = i < k.hp ? lit : 'rgba(0,0,0,.55)';
+      ctx.fill();
+      if(i < k.hp){                              // a thin rim so light dots read on light faces
+        ctx.strokeStyle = 'rgba(0,0,0,.35)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
-      ctx.stroke();
     }
     ctx.restore();
   }
@@ -621,11 +622,11 @@ function hitBricks(b){
 
     ctx.textAlign = 'center';
     if(state === 'ready'){
-      ctx.fillStyle = cfg.accent; ctx.font = '16px system-ui';
+      ctx.fillStyle = textCol(); ctx.font = '16px system-ui';
       ctx.fillText('Kliknij lub naciśnij spację', W / 2, H / 2 + 60);
     }
     if(state === 'paused'){
-      ctx.fillStyle = cfg.accent; ctx.font = 'bold 34px system-ui';
+      ctx.fillStyle = textCol(); ctx.font = 'bold 34px system-ui';
       ctx.fillText('PAUZA', W / 2, H / 2);
     }
     // When a shell is listening it draws its own game-over UI (score submit,
@@ -641,7 +642,7 @@ function hitBricks(b){
     }
     if(state === 'over' && !onGameOver){
       ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = cfg.accent; ctx.font = 'bold 44px system-ui';
+      ctx.fillStyle = textCol(); ctx.font = 'bold 44px system-ui';
       ctx.fillText('KONIEC GRY', W / 2, H / 2 - 16);
       ctx.fillStyle = cfg.paddleColor; ctx.font = '18px system-ui';
       ctx.fillText('Wynik ' + score, W / 2, H / 2 + 20);

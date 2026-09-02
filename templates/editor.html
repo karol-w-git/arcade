@@ -44,13 +44,6 @@
           <div class="field"><label for="accent">Accent / glow</label><input type="color" id="accent"></div>
           <div class="field"><label for="paddleColor">Paddle</label><input type="color" id="paddleColor"></div>
           <div class="field"><label for="ballColor">Ball</label><input type="color" id="ballColor"></div>
-          <div class="field">
-            <label for="textColor">Text</label>
-            <input type="color" id="textColor">
-            <label class="check" style="margin-top:8px">
-              <input type="checkbox" id="textColorAuto"> Follow paddle
-            </label>
-          </div>
         </div>
         <div class="field">
           <label>Brick palette</label>
@@ -70,6 +63,32 @@
             <option value="radial">Radial glow</option>
             <option value="flat">Flat</option>
           </select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Text</h3>
+        <div class="two">
+          <div class="field">
+            <label for="textColor">Body text</label>
+            <input type="color" id="textColor">
+            <label class="check" style="margin-top:8px">
+              <input type="checkbox" id="textColorAuto"> Follow paddle
+            </label>
+            <div class="hint">Titles, help line, player name.</div>
+          </div>
+          <div class="field">
+            <label for="accentTextColor">Accented text</label>
+            <input type="color" id="accentTextColor">
+            <label class="check" style="margin-top:8px">
+              <input type="checkbox" id="accentTextAuto"> Follow accent
+            </label>
+            <div class="hint">Scores, clock, prompts.</div>
+          </div>
+        </div>
+        <div class="hint">
+          Accented text used to be tied to Accent / glow, which is a lighting colour —
+          the two are separate now, so a glow that looks right need not be readable text.
         </div>
       </div>
 
@@ -307,6 +326,7 @@ config.sprites = config.sprites || {};
 
 const $ = id => document.getElementById(id);
 const COLOR_KEYS = ['pageBg','bg','accent','paddleColor','ballColor','pipColor'];
+// textColor and accentTextColor are handled separately: they may be empty (inherit)
 const NUM_KEYS = ['lives','ballSpeed','paddleWidth','boardAlpha','overlaySize','overlayOpacity','timeLimit','superHp','logoScale','pipSize','damageDarken'];
 const PRESETS = {
   'Midnight':  { pageBg:'#0a0c14', bg:'#05070f', accent:'#4cc9f0', paddleColor:'#e8ecf8', ballColor:'#e8ecf8',
@@ -429,6 +449,9 @@ function toForm(){
   $('grid').checked = !!config.grid;
   $('powerups').checked = !!config.powerups;
   $('mode').value = config.mode || 'classic';
+  $('accentTextAuto').checked = !config.accentTextColor;
+  $('accentTextColor').value = config.accentTextColor || config.accent;
+  $('accentTextColor').disabled = !config.accentTextColor;
   $('textColorAuto').checked = !config.textColor;
   $('textColor').value = config.textColor || config.paddleColor;
   $('textColor').disabled = !config.textColor;
@@ -461,6 +484,8 @@ function fromForm(){
   config.grid = $('grid').checked;
   config.powerups = $('powerups').checked;
   config.mode = $('mode').value;
+  config.accentTextColor = $('accentTextAuto').checked ? '' : $('accentTextColor').value;
+  $('accentTextColor').disabled = $('accentTextAuto').checked;
   config.textColor = $('textColorAuto').checked ? '' : $('textColor').value;
   $('textColor').disabled = $('textColorAuto').checked;
   config.superColor = $('superColorAuto').checked ? '' : $('superColor').value;

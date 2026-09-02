@@ -53,7 +53,7 @@
   }
   .b:hover{border-color:#3b4a76}
   .b.primary{background:var(--accent,#4cc9f0);border-color:var(--accent,#4cc9f0);color:#04121a;font-weight:600}
-  .big{font-size:34px;font-weight:700;margin:6px 0 2px;color:var(--accent,#4cc9f0);
+  .big{font-size:34px;font-weight:700;margin:6px 0 2px;color:var(--accent-text,#4cc9f0);
        font-variant-numeric:tabular-nums}
 
   /* ---- leaderboard ---- */
@@ -63,7 +63,7 @@
   ol.board li:last-child{border-bottom:0}
   ol.board .rank{width:24px;opacity:.45;font-size:12.5px;text-align:right}
   ol.board .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  ol.board .sc{font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent,#4cc9f0)}
+  ol.board .sc{font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent-text,#4cc9f0)}
   ol.board .lv{opacity:.4;font-size:12px;width:44px;text-align:right}
   ol.board li.me{background:rgba(255,255,255,.05);border-radius:6px}
   .none{opacity:.5;font-size:13.5px;padding:14px 0}
@@ -144,9 +144,11 @@ function paintChrome(cfg){
     : 'radial-gradient(circle at 50% -5%, ' + cfg.bg + ' 0%, ' + cfg.pageBg + ' 65%)';
   document.body.style.color = cfg.textColor || cfg.paddleColor;
   document.body.style.setProperty('--accent', cfg.accent);
+  document.body.style.setProperty('--accent-text', cfg.accentTextColor || cfg.accent);
   $('c').classList.toggle('framed', cfg.frame !== false);
   paintOverlay(cfg);
-  for(const id of ['score','lives','level','time']) $(id).style.color = cfg.accent;
+  const at = cfg.accentTextColor || cfg.accent;
+  for(const id of ['score','lives','level','time']) $(id).style.color = at;
   paintBackground(cfg);
 }
 
@@ -216,7 +218,8 @@ const hud = s => {
   $('levelBox').hidden = dig;            // in dig mode a level number means nothing
   if(dig && s.timeLeft !== null && s.timeLeft !== undefined){
     $('time').textContent = fmtTime(s.timeLeft);
-    $('time').style.color = s.timeLeft <= 10 ? '#ff5d73' : (CONFIG.accent || '');
+    $('time').style.color = s.timeLeft <= 10 ? '#ff5d73'
+      : (CONFIG.accentTextColor || CONFIG.accent || '');
   }
 };
 

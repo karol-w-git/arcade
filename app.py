@@ -69,6 +69,9 @@ GAME_TYPES = {
             # page text (HUD, prompts, help). "" follows the paddle colour, which
             # is what it used to borrow - fine on dark themes, unreadable on light
             "textColor": "",
+            # colour of the accented text (scores, prompts). "" follows the accent,
+            # which also drives the glow - this splits the two apart
+            "accentTextColor": "",
             "brickColors": ["#f72585", "#b5179e", "#7209b7", "#4361ee",
                             "#4cc9f0", "#3ddc97", "#ffd166", "#ff8c42"],
             "grid": True,
@@ -307,7 +310,7 @@ def clean_config(game_type: str, raw: dict) -> dict:
                 cols = [c for c in v if isinstance(c, str) and hexcol.match(c)][:12]
                 out[key] = cols or dv
             elif isinstance(dv, str):
-                if key in ("superColor", "textColor"):
+                if key in ("superColor", "textColor", "accentTextColor"):
                     v = v if isinstance(v, str) else ""
                     out[key] = v if (v == "" or hexcol.match(v)) else ""
                 elif key.endswith("Color") or key in ("bg", "accent", "pageBg"):

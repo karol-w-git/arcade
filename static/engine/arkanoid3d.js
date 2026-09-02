@@ -22,6 +22,7 @@ const DEFAULTS = {
   powerups: false, particles: true, level: 0, boardAlpha: 1, sprites: {},
   mode: 'classic', timeLimit: 90, superHp: 3,
   superColor: '', pipSize: 6, pipColor: '#ffffff', logoScale: 80, damageDarken: 0.32,
+  accentTextColor: '',
   tiltX: 0.22, tiltY: 0.17     // radians; how far the board leans
 };
 
@@ -175,7 +176,8 @@ function arkanoid3d(canvas, userConfig, opts){
   })();
 
   const brickGeo = beveledBox(BW / S, BH / S, BRICK_D, 0.06);
-  const pipGeo = new THREE.PlaneGeometry(1, 1);     // scaled per segment
+  const pipGeo = new THREE.PlaneGeometry(1, 1);     // logo planes
+  const dotGeo = new THREE.CircleGeometry(1, 16);   // hit dots
   const superGeo = new THREE.BoxGeometry(SUPER / S, SUPER / S, SUPER / S);
   const shardGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
   const ballGeo = new THREE.SphereGeometry(7 / S, 20, 16);
@@ -248,21 +250,20 @@ function arkanoid3d(canvas, userConfig, opts){
   function addPips(k){
     const side = SUPER / S;
     const n = k.maxHp || 1;
-    const inset = side * 0.06;
+    const pr = clamp(+cfg.pipSize || 6, 1, 14) / S;
+    const inset = pr + side * 0.02;             // every dot stays inside the face
     const bw = side - inset * 2, perim = 4 * bw, seg = perim / n;
-    const thick = clamp(+cfg.pipSize || 6, 1, 14) / S;
-    const at = dist => {                     // walk one face's border clockwise
+    const at = dist => {                        // walk one face's border clockwise
       let d = ((dist % perim) + perim) % perim;
       const half = bw / 2;
-      if(d < bw) return [-half + d, half, 0];
+      if(d < bw) return [-half + d, half];
       d -= bw;
-      if(d < bw) return [half, half - d, 1];
+      if(d < bw) return [half, half - d];
       d -= bw;
-      if(d < bw) return [half - d, -half, 0];
+      if(d < bw) return [half - d, -half];
       d -= bw;
-      return [-half, -half + d, 1];
+      return [-half, -half + d];
     };
-    // the same ring on the front and back, plus the two sides
     const faces = [
       { pos: [0, 0, side / 2 + 0.01], rot: [0, 0, 0] },
       { pos: [0, 0, -side / 2 - 0.01], rot: [0, Math.PI, 0] },
@@ -275,12 +276,10 @@ function arkanoid3d(canvas, userConfig, opts){
       g.rotation.set(f.rot[0], f.rot[1], f.rot[2]);
       k.mesh.add(g);
       for(let i = 0; i < n; i++){
-        const gap = Math.min(seg * 0.18, side * 0.03);
-        const a = at(i * seg + gap / 2), b = at((i + 1) * seg - gap / 2);
-        const m = new THREE.Mesh(pipGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-        const len = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
-        if(a[2] === 0) m.scale.set(len, thick, 1); else m.scale.set(thick, len, 1);
-        m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0);
+        const [px, py] = at((i + 0.5) * seg);
+        const m = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        m.scale.setScalar(pr);
+        m.position.set(px, py, 0);
         g.add(m);
         k.pips.push(m);
       }
@@ -758,7 +757,8 @@ function arkanoid3d(canvas, userConfig, opts){
       dropMeshes(bricks); dropMeshes(balls); dropMeshes(powerups);
       for(const p of shards){ board.remove(p.mesh); }
       shards = [];
-      brickGeo.dispose(); ballGeo.dispose(); puGeo.dispose(); shardGeo.dispose(); pipGeo.dispose();
+      brickGeo.dispose(); ballGeo.dispose(); puGeo.dispose(); shardGeo.dispose();
+      pipGeo.dispose(); dotGeo.dispose();
       if(paddleGeo) paddleGeo.dispose();
       renderer.dispose();
     }
