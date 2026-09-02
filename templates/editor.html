@@ -346,7 +346,8 @@ function paintSprites(){
     const thumb = document.querySelector('[data-thumb="' + slot + '"]');
     const clear = document.querySelector('[data-clear="' + slot + '"]');
     if(!thumb || !clear) continue;
-    thumb.style.backgroundImage = url ? 'url("' + url + '?v=' + (config._v || 0) + '")' : '';
+    // the URL already carries its own ?v= stamp from the upload
+    thumb.style.backgroundImage = url ? 'url("' + url + '")' : '';
     thumb.classList.toggle('empty', !url);
     clear.hidden = !url;
   }
@@ -369,8 +370,7 @@ document.addEventListener('change', async e => {
   const r = await fetch('/api/instances/' + currentId + '/sprite', { method: 'POST', body: fd });
   const data = await r.json().catch(() => ({}));
   if(!r.ok){ say(''); alert(data.error || 'Upload failed.'); return; }
-  config.sprites[slot] = data.url;
-  config._v = data.cache_key;          // busts the browser cache on replace
+  config.sprites[slot] = data.url;      // versioned, so caches see a new key
   paintSprites();
   push(true);
   await save();

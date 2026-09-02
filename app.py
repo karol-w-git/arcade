@@ -248,7 +248,7 @@ def unique_slug(base: str, ignore_id=None) -> str:
         n += 1
 
 
-SPRITE_URL_RE = re.compile(r"^/uploads/\d+/[A-Za-z0-9._-]{1,60}$")
+SPRITE_URL_RE = re.compile(r"^/uploads/\d+/[A-Za-z0-9._-]{1,60}(\?v=\d{1,12})?$")
 
 
 def clean_sprites(raw) -> dict:
@@ -504,9 +504,10 @@ def api_sprite_upload(iid):
         old.unlink()
     (folder / f"{slot}.{ext}").write_bytes(blob)
 
-    # Cache-bust so the editor preview picks the new file up immediately.
-    return jsonify(slot=slot, url=f"/uploads/{iid}/{slot}.{ext}",
-                   cache_key=int(time.time()))
+    # Cache-bust so every layer that keys images by URL picks the new file up.
+    stamp = int(time.time())
+    return jsonify(slot=slot, url=f"/uploads/{iid}/{slot}.{ext}?v={stamp}",
+                   cache_key=stamp)
 
 
 @app.delete("/api/instances/<int:iid>/sprite/<slot>")
@@ -528,6 +529,7 @@ def uploaded_file(iid, filename):
     if not folder.is_dir():
         abort(404)
     resp = send_from_directory(folder, filename)
+    resp.headers["Cache-Control"] = "no-cache, must-revalidate"
     resp.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     return resp

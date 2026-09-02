@@ -174,7 +174,7 @@ function arkanoid3d(canvas, userConfig, opts){
   })();
 
   const brickGeo = beveledBox(BW / S, BH / S, BRICK_D, 0.06);
-  const pipGeo = new THREE.CircleGeometry(1, 14);   // scaled per instance
+  const pipGeo = new THREE.PlaneGeometry(1, 1);     // scaled per segment
   const superGeo = new THREE.BoxGeometry(SUPER / S, SUPER / S, SUPER / S);
   const shardGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
   const ballGeo = new THREE.SphereGeometry(7 / S, 20, 16);
@@ -223,29 +223,47 @@ function arkanoid3d(canvas, userConfig, opts){
     m.needsUpdate = true;
   }
 
-  /* Remaining hits as discs on the cube's front face. Fitted to the face and
-     wrapped onto extra rows, so a 20-hit cube never spills past its own edge. */
+  /* Remaining hits as segments of the cube's border, on all four faces, so the
+     logo in the middle of each face stays clear. */
   function addPips(k){
     const side = SUPER / S;
     const n = k.maxHp || 1;
-    const pad = side * 0.1;
-    const avail = side - pad * 2;
-    const perRow = Math.max(1, Math.min(n, Math.floor(avail / (side * 0.09))));
-    const rows = Math.ceil(n / perRow);
-    const gapx = perRow > 1 ? avail / (perRow - 1) : 0;
-    const pr = clamp(perRow > 1 ? gapx * 0.34 : side * 0.07, side * 0.012, side * 0.07);
-    const rowH = pr * 2 + side * 0.02;
-    const bottom = -side / 2 + pad + pr;
-    for(let i = 0; i < n; i++){
-      const row = Math.floor(i / perRow), col = i % perRow;
-      const inRow = Math.min(perRow, n - row * perRow);
-      const px = -((inRow - 1) * gapx) / 2 + col * gapx;
-      const py = bottom + (rows - 1 - row) * rowH;
-      const m = new THREE.Mesh(pipGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      m.scale.setScalar(pr);
-      m.position.set(px, py, side / 2 + 0.02);      // just proud of the front face
-      k.mesh.add(m);
-      k.pips.push(m);
+    const inset = side * 0.06;
+    const bw = side - inset * 2, perim = 4 * bw, seg = perim / n;
+    const thick = side * 0.05;
+    const at = dist => {                     // walk one face's border clockwise
+      let d = ((dist % perim) + perim) % perim;
+      const half = bw / 2;
+      if(d < bw) return [-half + d, half, 0];
+      d -= bw;
+      if(d < bw) return [half, half - d, 1];
+      d -= bw;
+      if(d < bw) return [half - d, -half, 0];
+      d -= bw;
+      return [-half, -half + d, 1];
+    };
+    // the same ring on the front and back, plus the two sides
+    const faces = [
+      { pos: [0, 0, side / 2 + 0.01], rot: [0, 0, 0] },
+      { pos: [0, 0, -side / 2 - 0.01], rot: [0, Math.PI, 0] },
+      { pos: [side / 2 + 0.01, 0, 0], rot: [0, Math.PI / 2, 0] },
+      { pos: [-side / 2 - 0.01, 0, 0], rot: [0, -Math.PI / 2, 0] }
+    ];
+    for(const f of faces){
+      const g = new THREE.Group();
+      g.position.set(f.pos[0], f.pos[1], f.pos[2]);
+      g.rotation.set(f.rot[0], f.rot[1], f.rot[2]);
+      k.mesh.add(g);
+      for(let i = 0; i < n; i++){
+        const gap = Math.min(seg * 0.18, side * 0.03);
+        const a = at(i * seg + gap / 2), b = at((i + 1) * seg - gap / 2);
+        const m = new THREE.Mesh(pipGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        const len = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+        if(a[2] === 0) m.scale.set(len, thick, 1); else m.scale.set(thick, len, 1);
+        m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0);
+        g.add(m);
+        k.pips.push(m);
+      }
     }
   }
 
@@ -259,8 +277,9 @@ function arkanoid3d(canvas, userConfig, opts){
       m.map = tex('brickSuper') || null;
       if(m.map) m.color = new THREE.Color(0xffffff);
       m.needsUpdate = true;
+      const per = Math.max(1, k.maxHp || 1);
       for(let i = 0; i < (k.pips || []).length; i++){
-        k.pips[i].material.color = new THREE.Color(i < k.hp ? 0xffffff : 0x1a1a1a);
+        k.pips[i].material.color = new THREE.Color((i % per) < k.hp ? 0xffffff : 0x151515);
       }
       return;
     }

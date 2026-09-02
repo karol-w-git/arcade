@@ -489,33 +489,44 @@ function hitBricks(b){
     ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2;
     roundRect(k.x + 1, k.y + 1, k.w - 2, k.h - 2, 5); ctx.stroke();
 
-    if(punch > 0){                               // white flash over the whole face
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * punch) + ')';
-      roundRect(k.x, k.y, k.w, k.h, 5); ctx.fill();
+    if(punch > 0){       // flash the rim, not the face - the logo stays readable
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.9 * punch) + ')';
+      ctx.lineWidth = Math.max(4, k.w * 0.07);
+      roundRect(k.x + 2, k.y + 2, k.w - 4, k.h - 4, 5); ctx.stroke();
+      ctx.restore();
     }
 
-    // Remaining hits, as pips inside the cube. The count is configurable up to
-    // 20, so the row is fitted to the cube's width and wrapped rather than
-    // allowed to spill over the edges.
+    // Remaining hits, drawn as segments of the cube's own border rather than
+    // pips on its face - the face belongs to the logo.
     const n = k.maxHp || 1;
-    const pad = Math.max(6, k.w * 0.09);
-    const avail = k.w - pad * 2;
-    const perRow = Math.max(1, Math.min(n, Math.floor(avail / 9)));
-    const rows = Math.ceil(n / perRow);
-    const gapx = perRow > 1 ? avail / (perRow - 1) : 0;
-    const pr = clamp(Math.min(perRow > 1 ? gapx * 0.34 : 4.5, 4.5), 1.6, 4.5);
-    const rowH = pr * 2 + 3;
-    const bottom = k.y + k.h - pad * 0.7;
+    const inset = Math.max(3, k.w * 0.045);
+    const bx = k.x + inset, by = k.y + inset;
+    const bw = k.w - inset * 2, bh = k.h - inset * 2;
+    const perim = 2 * (bw + bh), seg = perim / n;
+    // walk the border clockwise from the top-left corner
+    const at = dist => {
+      let d = ((dist % perim) + perim) % perim;
+      if(d < bw) return [bx + d, by];
+      d -= bw;
+      if(d < bh) return [bx + bw, by + d];
+      d -= bh;
+      if(d < bw) return [bx + bw - d, by + bh];
+      d -= bw;
+      return [bx, by + bh - d];
+    };
+    ctx.lineWidth = Math.max(3, k.w * 0.05);
+    ctx.lineCap = 'butt';
     for(let i = 0; i < n; i++){
-      const row = Math.floor(i / perRow), col = i % perRow;
-      const inRow = Math.min(perRow, n - row * perRow);
-      const rowW = (inRow - 1) * gapx;
-      const px = k.x + k.w / 2 - rowW / 2 + col * gapx;
-      const py = bottom - (rows - 1 - row) * rowH - pr;
+      const gap = Math.min(seg * 0.18, 4);
+      ctx.strokeStyle = i < k.hp ? 'rgba(255,255,255,.95)' : 'rgba(0,0,0,.5)';
       ctx.beginPath();
-      ctx.arc(px, py, pr, 0, Math.PI * 2);
-      ctx.fillStyle = i < k.hp ? 'rgba(255,255,255,.95)' : 'rgba(0,0,0,.45)';
-      ctx.fill();
+      const steps = 6;                       // sampled, so a segment can turn a corner
+      for(let t = 0; t <= steps; t++){
+        const [px, py] = at(i * seg + gap / 2 + (seg - gap) * (t / steps));
+        t ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
     }
     ctx.restore();
   }

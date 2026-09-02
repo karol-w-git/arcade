@@ -89,7 +89,8 @@ the top middle behind a three-hit cap, and breaking it before the clock runs out
 wins the round (+2000). The cube is square in board space - two bricks wide and
 just as tall - so it renders as an actual cube in 3D and as a shaded box in 2D.
 Upload an image to the **brickSuper** sprite slot and it appears on its faces:
-this is where a company logo goes.
+this is where a company logo goes. Remaining hits are shown as segments of the
+cube's **border**, which go dark one by one - the face is left clear for the logo.
 
 Time limit (15 s - 10 min) and the cube's hit count (1-20) are per instance.
 Power-ups default to off; a checkbox brings them back. Classic mode is unchanged
@@ -122,6 +123,11 @@ it to watermark mode.
 Any of these can carry a custom image, and any slot left empty keeps the drawn shape:
 paddle, ball, brick (1/2/3 hits), unbreakable brick, the dig-mode cube, the four
 power-ups, and a full board background image.
+
+Replacing a slot keeps the filename, so the upload response hands back a
+`?v=<stamp>` URL and that versioned URL is what gets stored. Without it the
+editor preview, both engines and the browser all keep serving the previous image,
+since each of them caches by URL.
 
 PNG / JPG / GIF / WebP, 2 MB max. Files live in `data/uploads/<instance-id>/` and are
 served with `Content-Security-Policy: sandbox` and `nosniff`. SVG is rejected on purpose —
