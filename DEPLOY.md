@@ -26,6 +26,14 @@ via the `git@github.com:` URL instead.
 
 ## 2. Create the VM
 
+Reserve the IP first (or promote it afterwards, as done here) so the hostname
+never changes — a stopped VM otherwise comes back with a different address:
+
+```bash
+gcloud compute addresses create arcade-ip --project=arcade-games-kw --region=us-central1
+```
+
+
 ```bash
 gcloud compute instances create arcade --project=arcade-games-kw --zone=us-central1-a --machine-type=e2-micro --image-family=debian-12 --image-project=debian-cloud --boot-disk-size=30GB --boot-disk-type=pd-standard --tags=http-server,https-server
 ```
@@ -54,8 +62,8 @@ gcloud compute firewall-rules create allow-https --allow=tcp:443 --target-tags=h
 gcloud compute instances describe arcade --zone=us-central1-a --project=arcade-games-kw --format="value(networkInterfaces[0].accessConfigs[0].natIP)"
 ```
 
-Take that IP, swap the dots for dashes, and append `.nip.io` — an IP of
-`34.71.2.9` becomes **`34-71-2-9.nip.io`**. That hostname resolves to your VM
+Take that IP, swap the dots for dashes, and append `.nip.io` — this deployment's
+`35.188.197.255` became **`35-188-197-255.nip.io`**. That hostname resolves to your VM
 with no DNS setup, and Caddy will get a real certificate for it, so the padlock
 works and the player password isn't sent in the clear.
 
@@ -64,12 +72,48 @@ needs to know its own hostname, so you can switch later by re-running step 4.
 
 ## 4. Install everything
 
-```bash
-gcloud compute scp --recurse deploy arcade:~ --zone=us-central1-a --project=arcade-games-kw
-```
+The VM clones the deploy scripts from GitHub itself - no file copying, and it
+works regardless of what your local network allows.
 
-```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo bash ~/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
+> **If your network blocks outbound port 22** (mine does), add
+> `--tunnel-through-iap` to every `ssh`/`scp` command. It routes SSH through
+> Google over 443. It needs the IAP API and a firewall rule for Google's tunnel
+> range - both created once:
+>
+> ```bash
+> gcloud services enable iap.googleapis.com --project=arcade-games-kw
+> ```
+>
+> ```bash
+> gcloud compute firewall-rules create allow-ssh-iap --project=arcade-games-kw "--allow=tcp:22" "--source-ranges=35.235.240.0/20"
+> ```
+>
+> `gcloud compute scp` is best avoided on Windows either way: it shells out to
+> PuTTY's `pscp`, which cannot resolve `~` as a destination.
+
+> **PowerShell quoting:** the `gcloud` wrapper re-splits arguments containing
+> double quotes, so a remote command with quotes in it arrives mangled. Pass the
+> command as a variable, and if it needs quotes, base64-encode it:
+>
+> ```powershell
+> $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+> $c = "echo $b64 | base64 -d | sudo bash"
+> gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command $c
+> ```
+>
+> Comma-separated flag values need quoting too: `"--tags=http-server,https-server"`.
+
+```powershell
+$script = @'
+set -euo pipefail
+apt-get update -qq
+apt-get install -y -qq git
+rm -rf /tmp/arcade-boot
+git clone -q --depth 1 https://github.com/karol-w-git/arcade.git /tmp/arcade-boot
+bash /tmp/arcade-boot/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 35-188-197-255.nip.io
+'@
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command "echo $b64 | base64 -d | sudo bash"
 ```
 
 Substitute your own hostname. The script installs Python, git, sqlite3 and Caddy,
@@ -87,13 +131,16 @@ Then open `https://<your-host>` and sign in.
 The VM starts with an empty database. Either rebuild your instances through the
 dashboard, or copy the local ones up **once**:
 
-```bash
-gcloud compute scp --recurse data/arcade.db data/uploads arcade:/tmp/ --zone=us-central1-a --project=arcade-games-kw
+Base64 the database over the SSH channel - no scp, so it works through the IAP
+tunnel:
+
+```powershell
+$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("datarcade.db"))
+$restore = "echo $b64 | base64 -d > /tmp/arcade.db && sudo systemctl stop arcade && sudo cp /tmp/arcade.db /opt/arcade/app/data/arcade.db && sudo chown arcade:arcade /opt/arcade/app/data/arcade.db && sudo systemctl start arcade"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command $restore
 ```
 
-```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo systemctl stop arcade && sudo cp /tmp/arcade.db /opt/arcade/app/data/ && sudo cp -r /tmp/uploads /opt/arcade/app/data/ && sudo chown -R arcade:arcade /opt/arcade/app/data && sudo systemctl start arcade"
-```
+Sprites (if you uploaded any) travel the same way as a tar archive.
 
 After this, **treat the VM as the source of truth** — it accumulates real scores
 you cannot recreate. Copy down, never up.
@@ -113,7 +160,7 @@ git add -A; git commit -m "what changed"; git push
 ```
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="cd /opt/arcade/app && sudo git pull && sudo systemctl restart arcade"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="cd /opt/arcade/app && sudo git pull && sudo systemctl restart arcade"
 ```
 
 Re-running `setup-vm.sh` does the same thing plus dependency updates, and leaves
@@ -121,7 +168,7 @@ Re-running `setup-vm.sh` does the same thing plus dependency updates, and leaves
 checkout so you always get the current version of the script:
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo bash /opt/arcade/app/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="sudo bash /opt/arcade/app/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
 ```
 
 ## 7. Backups (worth doing once players exist)
@@ -131,7 +178,7 @@ gcloud storage buckets create gs://arcade-backups-kw --location=us-central1 --pr
 ```
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo bash ~/deploy/backup.sh gs://arcade-backups-kw"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --tunnel-through-iap --quiet --command="sudo bash ~/deploy/backup.sh gs://arcade-backups-kw"
 ```
 
 Nightly at 03:00, via root's crontab on the VM:
