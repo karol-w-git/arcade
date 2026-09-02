@@ -92,7 +92,12 @@ Upload an image to the **brickSuper** sprite slot and it appears on its faces:
 this is where a company logo goes. Remaining hits are shown as segments of the
 cube's **border**, which go dark one by one - the face is left clear for the logo.
 
-Time limit (15 s - 10 min) and the cube's hit count (1-20) are per instance.
+Time limit (15 s - 10 min) and the cube's hit count (1-20) are per instance, as
+are the cube's **colour** (or "follow accent"), the **logo size** on its faces,
+and the **thickness and colour** of the hit segments. **Damage darkening** (Colors
+panel) sets how far any brick dims as it is worn down - 0 keeps every brick at
+full colour - and **Text** sets the page text colour, which used to borrow the
+paddle colour and was unreadable on light themes.
 Power-ups default to off; a checkbox brings them back. Classic mode is unchanged
 and still the default.
 

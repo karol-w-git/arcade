@@ -25,6 +25,11 @@ const DEFAULTS = {
   mode: 'classic',  // 'classic' clears the board; 'dig' races a clock to the superblock
   timeLimit: 90,    // seconds (dig)
   superHp: 3,       // hits to break the superblock (dig)
+  superColor: '',   // '' follows the accent
+  pipSize: 6,       // thickness of the hit segments, in board px
+  pipColor: '#ffffff',
+  logoScale: 80,    // % of the cube face the logo covers
+  damageDarken: 0.32,
   level: 0,         // starting level index
   boardAlpha: 1,    // 0 lets the page background show through the board
   sprites: {}
@@ -122,6 +127,8 @@ function arkanoid(cv, userConfig, opts){
   }
 
   const digMode = () => cfg.mode === 'dig';
+  const superCol = () => cfg.superColor || cfg.accent;
+  const dmg = () => clamp(cfg.damageDarken === undefined ? 0.32 : +cfg.damageDarken, 0, 0.8);
 
   function makeBricks(idx){
     const set = digMode() ? DIG_LEVELS : LEVELS;
@@ -149,6 +156,7 @@ function arkanoid(cv, userConfig, opts){
       out.push({
         x: x, y: y, w: BW, h: BH,
         hp: ch === 'X' ? Infinity : +ch,
+        maxHp: ch === 'X' ? Infinity : +ch,
         pi: (r + (+ch || 0)) % pal.length,     // palette index, resolved at draw time
         solid: ch === 'X'
       });
@@ -444,7 +452,8 @@ function hitBricks(b){
     const wear = 1 - k.hp / (k.maxHp || 1);
     const t = Date.now() / 600;
     const d = Math.round(k.w * 0.16);            // apparent depth
-    const face = darken(cfg.accent, wear * 0.4);
+    const col = superCol();
+    const face = darken(col, wear * dmg());
     const img = sprite('brickSuper');
 
     // 0..1, decaying over ~260ms after a hit
@@ -459,17 +468,17 @@ function hitBricks(b){
       ctx.rotate((Math.random() - 0.5) * 0.04 * punch);
       ctx.translate(-cx, -cy);
     }
-    ctx.shadowColor = cfg.accent;
+    ctx.shadowColor = col;
     ctx.shadowBlur = 18 + Math.sin(t) * 7;       // a slow pulse: this is the target
 
     // top face
-    ctx.fillStyle = darken(cfg.accent, wear * 0.4 + 0.12);
+    ctx.fillStyle = darken(col, wear * dmg() + 0.12);
     ctx.beginPath();
     ctx.moveTo(k.x, k.y); ctx.lineTo(k.x + d, k.y - d);
     ctx.lineTo(k.x + k.w + d, k.y - d); ctx.lineTo(k.x + k.w, k.y);
     ctx.closePath(); ctx.fill();
     // right face
-    ctx.fillStyle = darken(cfg.accent, wear * 0.4 + 0.34);
+    ctx.fillStyle = darken(col, wear * dmg() + 0.34);
     ctx.beginPath();
     ctx.moveTo(k.x + k.w, k.y); ctx.lineTo(k.x + k.w + d, k.y - d);
     ctx.lineTo(k.x + k.w + d, k.y + k.h - d); ctx.lineTo(k.x + k.w, k.y + k.h);
@@ -480,7 +489,8 @@ function hitBricks(b){
     ctx.fillStyle = face;
     roundRect(k.x, k.y, k.w, k.h, 5); ctx.fill();
     if(img){
-      const pad = Math.round(k.w * 0.1);
+      const scale = clamp(+cfg.logoScale || 80, 30, 100) / 100;
+      const pad = Math.round(k.w * (1 - scale) / 2);
       ctx.save();
       roundRect(k.x + 2, k.y + 2, k.w - 4, k.h - 4, 4); ctx.clip();
       drawSprite(img, k.x + pad, k.y + pad, k.w - pad * 2, k.h - pad * 2);
@@ -515,11 +525,12 @@ function hitBricks(b){
       d -= bw;
       return [bx, by + bh - d];
     };
-    ctx.lineWidth = Math.max(3, k.w * 0.05);
+    ctx.lineWidth = clamp(+cfg.pipSize || 6, 1, 14);
     ctx.lineCap = 'butt';
+    const lit = cfg.pipColor || '#ffffff';
     for(let i = 0; i < n; i++){
       const gap = Math.min(seg * 0.18, 4);
-      ctx.strokeStyle = i < k.hp ? 'rgba(255,255,255,.95)' : 'rgba(0,0,0,.5)';
+      ctx.strokeStyle = i < k.hp ? lit : 'rgba(0,0,0,.5)';
       ctx.beginPath();
       const steps = 6;                       // sampled, so a segment can turn a corner
       for(let t = 0; t <= steps; t++){
@@ -573,7 +584,8 @@ function hitBricks(b){
       // Damage is shown by darkening, never by alpha - a see-through board would
       // otherwise leak the page background through every partly-damaged brick.
       const base = k.solid ? '#5b6684' : pal[k.pi % pal.length];
-      ctx.fillStyle = k.solid ? base : darken(base, k.hp >= 3 ? 0 : k.hp === 2 ? 0.14 : 0.32);
+      const wear = k.solid ? 0 : 1 - k.hp / (k.maxHp || 1);
+      ctx.fillStyle = k.solid ? base : darken(base, wear * dmg());
       roundRect(k.x, k.y, k.w, k.h, 4); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.18)';
       roundRect(k.x + 2, k.y + 2, k.w - 4, 5, 2); ctx.fill();

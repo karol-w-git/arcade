@@ -21,6 +21,7 @@ const DEFAULTS = {
   grid: true, lives: 3, ballSpeed: 7.2, paddleWidth: 110,
   powerups: false, particles: true, level: 0, boardAlpha: 1, sprites: {},
   mode: 'classic', timeLimit: 90, superHp: 3,
+  superColor: '', pipSize: 6, pipColor: '#ffffff', logoScale: 80, damageDarken: 0.32,
   tiltX: 0.22, tiltY: 0.17     // radians; how far the board leans
 };
 
@@ -225,12 +226,31 @@ function arkanoid3d(canvas, userConfig, opts){
 
   /* Remaining hits as segments of the cube's border, on all four faces, so the
      logo in the middle of each face stays clear. */
+  function addLogos(k){
+    const side = SUPER / S;
+    k.logos = [];
+    const faces = [
+      { pos: [0, 0, side / 2 + 0.015], rot: [0, 0, 0] },
+      { pos: [0, 0, -side / 2 - 0.015], rot: [0, Math.PI, 0] },
+      { pos: [side / 2 + 0.015, 0, 0], rot: [0, Math.PI / 2, 0] },
+      { pos: [-side / 2 - 0.015, 0, 0], rot: [0, -Math.PI / 2, 0] }
+    ];
+    for(const f of faces){
+      const m = new THREE.Mesh(pipGeo, new THREE.MeshBasicMaterial({ transparent: true }));
+      m.position.set(f.pos[0], f.pos[1], f.pos[2]);
+      m.rotation.set(f.rot[0], f.rot[1], f.rot[2]);
+      m.visible = false;
+      k.mesh.add(m);
+      k.logos.push(m);
+    }
+  }
+
   function addPips(k){
     const side = SUPER / S;
     const n = k.maxHp || 1;
     const inset = side * 0.06;
     const bw = side - inset * 2, perim = 4 * bw, seg = perim / n;
-    const thick = side * 0.05;
+    const thick = clamp(+cfg.pipSize || 6, 1, 14) / S;
     const at = dist => {                     // walk one face's border clockwise
       let d = ((dist % perim) + perim) % perim;
       const half = bw / 2;
@@ -270,16 +290,25 @@ function arkanoid3d(canvas, userConfig, opts){
   function styleBrick(k){
     if(k.sup){
       const m = k.mesh.material;
-      const acc = new THREE.Color(cfg.accent);
+      const acc = new THREE.Color(superCol());
       const wear = 1 - (k.hp / (k.maxHp || 1));
-      m.color = acc.clone().multiplyScalar(1 - wear * 0.45);
+      m.color = acc.clone().multiplyScalar(1 - wear * dmg());
       m.emissive = acc.clone().multiplyScalar(0.35);
-      m.map = tex('brickSuper') || null;
-      if(m.map) m.color = new THREE.Color(0xffffff);
+      m.map = null;                       // the logo rides on its own planes
       m.needsUpdate = true;
+      // logo planes: size follows logoScale, texture follows the sprite slot
+      const side = SUPER / S, ls = clamp(+cfg.logoScale || 80, 30, 100) / 100;
+      const lt = tex('brickSuper');
+      for(const plane of (k.logos || [])){
+        plane.visible = !!lt;
+        plane.material.map = lt || null;
+        plane.material.needsUpdate = true;
+        plane.scale.set(side * ls, side * ls, 1);
+      }
       const per = Math.max(1, k.maxHp || 1);
+      const litCol = new THREE.Color(cfg.pipColor || '#ffffff');
       for(let i = 0; i < (k.pips || []).length; i++){
-        k.pips[i].material.color = new THREE.Color((i % per) < k.hp ? 0xffffff : 0x151515);
+        k.pips[i].material.color = (i % per) < k.hp ? litCol.clone() : new THREE.Color(0x151515);
       }
       return;
     }
@@ -288,8 +317,9 @@ function arkanoid3d(canvas, userConfig, opts){
     const t = tex(k.solid ? 'brickSolid' : 'brick' + clamp(k.hp, 1, 3));
     const m = k.mesh.material;
     // damage darkens, never fades - a see-through board would show through otherwise
+    const wear = k.solid ? 0 : 1 - k.hp / (k.maxHp || 1);
     m.color = t ? new THREE.Color(0xffffff)
-      : new THREE.Color(k.solid ? base : darken(base, k.hp >= 3 ? 0 : k.hp === 2 ? 0.14 : 0.32));
+      : new THREE.Color(k.solid ? base : darken(base, wear * dmg()));
     m.map = t || null;
     m.emissive = new THREE.Color(base).multiplyScalar(k.solid ? 0.05 : 0.12);
     m.needsUpdate = true;
@@ -302,6 +332,8 @@ function arkanoid3d(canvas, userConfig, opts){
   }
 
   const digMode = () => cfg.mode === 'dig';
+  const superCol = () => cfg.superColor || cfg.accent;
+  const dmg = () => clamp(cfg.damageDarken === undefined ? 0.32 : +cfg.damageDarken, 0, 0.8);
 
   function makeBricks(idx){
     dropMeshes(bricks);
@@ -321,6 +353,7 @@ function arkanoid3d(canvas, userConfig, opts){
       board.add(mesh);
       const k = { x: x, y: y, w: SUPER, h: SUPER, hp: hp, maxHp: hp,
                   solid: false, sup: true, pi: 0, mesh: mesh, pips: [] };
+      addLogos(k);
       addPips(k);
       bricks.push(k);
       styleBrick(k);
@@ -337,6 +370,7 @@ function arkanoid3d(canvas, userConfig, opts){
       mesh.position.set(wx(x + BW / 2), wy(y + BH / 2), 0);
       board.add(mesh);
       const k = { x: x, y: y, w: BW, h: BH, hp: ch === 'X' ? Infinity : +ch,
+                  maxHp: ch === 'X' ? Infinity : +ch,
                   solid: ch === 'X', pi: (r + (+ch || 0)) % 8, mesh: mesh };
       bricks.push(k);
       styleBrick(k);
@@ -628,6 +662,7 @@ function arkanoid3d(canvas, userConfig, opts){
           bricks.splice(i, 1);
           if(k.sup){
             for(const pip of (k.pips || [])) pip.material.dispose();
+            for(const lg of (k.logos || [])) lg.material.dispose();
             burst(k, 4);                  // the cube goes out loudly
             shake = 26;
             score += 2000;

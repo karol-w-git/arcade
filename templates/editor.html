@@ -44,10 +44,22 @@
           <div class="field"><label for="accent">Accent / glow</label><input type="color" id="accent"></div>
           <div class="field"><label for="paddleColor">Paddle</label><input type="color" id="paddleColor"></div>
           <div class="field"><label for="ballColor">Ball</label><input type="color" id="ballColor"></div>
+          <div class="field">
+            <label for="textColor">Text</label>
+            <input type="color" id="textColor">
+            <label class="check" style="margin-top:8px">
+              <input type="checkbox" id="textColorAuto"> Follow paddle
+            </label>
+          </div>
         </div>
         <div class="field">
           <label>Brick palette</label>
           <div class="palette" id="palette"></div>
+        </div>
+        <div class="field">
+          <label for="damageDarken">Damage darkening <b id="damageDarkenV"></b></label>
+          <input type="range" id="damageDarken" min="0" max="0.8" step="0.02">
+          <div class="hint">How much a brick dims as it is worn down. 0 keeps every brick at full colour.</div>
         </div>
         <div class="field">
           <label class="check"><input type="checkbox" id="grid"> Grid lines on the board</label>
@@ -77,10 +89,32 @@
             <div class="field"><label for="superHp">Superblock hits <b id="superHpV"></b></label>
               <input type="range" id="superHp" min="1" max="20" step="1"></div>
           </div>
+          <div class="hint" style="margin-bottom:14px">
+            The cube is walled in at the top middle with a hard cap underneath — the only
+            way in is straight up the middle. Breaking it wins the round.
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="superColor">Cube colour</label>
+              <input type="color" id="superColor">
+              <label class="check" style="margin-top:8px">
+                <input type="checkbox" id="superColorAuto"> Follow accent
+              </label>
+            </div>
+            <div class="field">
+              <label for="logoScale">Logo size <b id="logoScaleV"></b></label>
+              <input type="range" id="logoScale" min="30" max="100" step="5">
+              <div class="hint">Share of the cube face the uploaded logo covers.</div>
+            </div>
+          </div>
+          <div class="two">
+            <div class="field"><label for="pipSize">Hit bar thickness <b id="pipSizeV"></b></label>
+              <input type="range" id="pipSize" min="1" max="14" step="1"></div>
+            <div class="field"><label for="pipColor">Hit bar colour</label>
+              <input type="color" id="pipColor"></div>
+          </div>
           <div class="hint">
-            The superblock is two bricks wide and two tall, walled in at the top middle
-            with a hard cap underneath — the only way in is straight up the middle.
-            Breaking it wins the round.
+            Remaining hits show as segments of the cube's border, so the logo stays clear.
           </div>
         </div>
       </div>
@@ -272,8 +306,8 @@ let config = {{ config|tojson }};
 config.sprites = config.sprites || {};
 
 const $ = id => document.getElementById(id);
-const COLOR_KEYS = ['pageBg','bg','accent','paddleColor','ballColor'];
-const NUM_KEYS = ['lives','ballSpeed','paddleWidth','boardAlpha','overlaySize','overlayOpacity','timeLimit','superHp'];
+const COLOR_KEYS = ['pageBg','bg','accent','paddleColor','ballColor','pipColor'];
+const NUM_KEYS = ['lives','ballSpeed','paddleWidth','boardAlpha','overlaySize','overlayOpacity','timeLimit','superHp','logoScale','pipSize','damageDarken'];
 const PRESETS = {
   'Midnight':  { pageBg:'#0a0c14', bg:'#05070f', accent:'#4cc9f0', paddleColor:'#e8ecf8', ballColor:'#e8ecf8',
                  brickColors:['#f72585','#b5179e','#7209b7','#4361ee','#4cc9f0','#3ddc97','#ffd166','#ff8c42'] },
@@ -395,6 +429,12 @@ function toForm(){
   $('grid').checked = !!config.grid;
   $('powerups').checked = !!config.powerups;
   $('mode').value = config.mode || 'classic';
+  $('textColorAuto').checked = !config.textColor;
+  $('textColor').value = config.textColor || config.paddleColor;
+  $('textColor').disabled = !config.textColor;
+  $('superColorAuto').checked = !config.superColor;
+  $('superColor').value = config.superColor || config.accent;
+  $('superColor').disabled = !config.superColor;
   $('particles').checked = !!config.particles;
   $('frame').checked = config.frame !== false;
   $('askName').checked = !!config.askName;
@@ -421,6 +461,10 @@ function fromForm(){
   config.grid = $('grid').checked;
   config.powerups = $('powerups').checked;
   config.mode = $('mode').value;
+  config.textColor = $('textColorAuto').checked ? '' : $('textColor').value;
+  $('textColor').disabled = $('textColorAuto').checked;
+  config.superColor = $('superColorAuto').checked ? '' : $('superColor').value;
+  $('superColor').disabled = $('superColorAuto').checked;
   config.particles = $('particles').checked;
   config.frame = $('frame').checked;
   config.askName = $('askName').checked;
@@ -438,6 +482,9 @@ function fromForm(){
   config.paddleWidth = +$('paddleWidth').value;
   config.boardAlpha = +$('boardAlpha').value;
   config.timeLimit = +$('timeLimit').value;
+  config.logoScale = +$('logoScale').value;
+  config.pipSize = +$('pipSize').value;
+  config.damageDarken = +$('damageDarken').value;
   config.superHp = +$('superHp').value;
   config.overlaySize = +$('overlaySize').value;
   config.overlayOpacity = +$('overlayOpacity').value;
@@ -462,6 +509,9 @@ function readTilt(){
 }
 
 function showAlpha(){
+  $('logoScaleV').textContent = config.logoScale + '%';
+  $('pipSizeV').textContent = config.pipSize + ' px';
+  $('damageDarkenV').textContent = Math.round(config.damageDarken * 100) + '%';
   const t = config.timeLimit || 90;
   $('timeLimitV').textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
   $('superHpV').textContent = config.superHp;
@@ -483,7 +533,7 @@ if($('clearScores')) $('clearScores').onclick = async () => {
 };
 
 // Gameplay params only take effect on a fresh game, so those inputs force a restart.
-const RESTART_ON = new Set(['lives', 'ballSpeed', 'paddleWidth', 'level', 'powerups', 'particles', 'mode', 'timeLimit', 'superHp']);
+const RESTART_ON = new Set(['lives', 'ballSpeed', 'paddleWidth', 'level', 'powerups', 'particles', 'mode', 'timeLimit', 'superHp', 'pipSize']);
 function onChange(e){
   fromForm();
   push(e && RESTART_ON.has(e.target.id));

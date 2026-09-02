@@ -66,6 +66,9 @@ GAME_TYPES = {
             "accent": "#4cc9f0",
             "paddleColor": "#e8ecf8",
             "ballColor": "#e8ecf8",
+            # page text (HUD, prompts, help). "" follows the paddle colour, which
+            # is what it used to borrow - fine on dark themes, unreadable on light
+            "textColor": "",
             "brickColors": ["#f72585", "#b5179e", "#7209b7", "#4361ee",
                             "#4cc9f0", "#3ddc97", "#ffd166", "#ff8c42"],
             "grid": True,
@@ -77,6 +80,13 @@ GAME_TYPES = {
             "mode": "classic",
             "timeLimit": 90,          # seconds, dig mode only
             "superHp": 3,             # hits to break the superblock
+            # "" means follow the accent colour
+            "superColor": "",
+            "pipSize": 6,             # thickness of the hit segments, board px
+            "pipColor": "#ffffff",
+            "logoScale": 80,          # % of the cube face the logo covers
+            # how far a brick darkens as it is worn down (0 = no darkening)
+            "damageDarken": 0.32,
             "powerups": False,        # off by default; switch back on per instance
             "level": 0,
             "bgStyle": "radial",
@@ -257,8 +267,16 @@ def clean_sprites(raw) -> dict:
     if not isinstance(raw, dict):
         return out
     for slot, url in raw.items():
-        if slot in SPRITE_SLOTS and isinstance(url, str) and SPRITE_URL_RE.match(url):
+        if slot not in SPRITE_SLOTS or not isinstance(url, str):
+            continue
+        if SPRITE_URL_RE.match(url):
             out[slot] = url
+            continue
+        # A malformed stamp (e.g. two ?v= from an older client) should cost the
+        # cache-buster, not the image itself.
+        base = url.split("?", 1)[0]
+        if SPRITE_URL_RE.match(base):
+            out[slot] = base
     return out
 
 
@@ -289,7 +307,10 @@ def clean_config(game_type: str, raw: dict) -> dict:
                 cols = [c for c in v if isinstance(c, str) and hexcol.match(c)][:12]
                 out[key] = cols or dv
             elif isinstance(dv, str):
-                if key.endswith("Color") or key in ("bg", "accent", "pageBg"):
+                if key in ("superColor", "textColor"):
+                    v = v if isinstance(v, str) else ""
+                    out[key] = v if (v == "" or hexcol.match(v)) else ""
+                elif key.endswith("Color") or key in ("bg", "accent", "pageBg"):
                     out[key] = v if isinstance(v, str) and hexcol.match(v) else dv
                 else:
                     out[key] = str(v)[:40]
@@ -302,6 +323,9 @@ def clean_config(game_type: str, raw: dict) -> dict:
     out["level"] = max(0, min(3, int(out["level"])))
     out["timeLimit"] = max(15, min(600, int(out["timeLimit"])))
     out["superHp"] = max(1, min(20, int(out["superHp"])))
+    out["pipSize"] = max(1, min(14, int(out["pipSize"])))
+    out["logoScale"] = max(30, min(100, int(out["logoScale"])))
+    out["damageDarken"] = max(0.0, min(0.8, float(out["damageDarken"])))
     if out.get("mode") not in ("classic", "dig"):
         out["mode"] = "classic"
     out["boardAlpha"] = max(0.0, min(1.0, float(out["boardAlpha"])))
