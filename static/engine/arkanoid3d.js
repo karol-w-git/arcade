@@ -174,6 +174,7 @@ function arkanoid3d(canvas, userConfig, opts){
   })();
 
   const brickGeo = beveledBox(BW / S, BH / S, BRICK_D, 0.06);
+  const pipGeo = new THREE.CircleGeometry(1, 14);   // scaled per instance
   const superGeo = new THREE.BoxGeometry(SUPER / S, SUPER / S, SUPER / S);
   const shardGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
   const ballGeo = new THREE.SphereGeometry(7 / S, 20, 16);
@@ -222,6 +223,32 @@ function arkanoid3d(canvas, userConfig, opts){
     m.needsUpdate = true;
   }
 
+  /* Remaining hits as discs on the cube's front face. Fitted to the face and
+     wrapped onto extra rows, so a 20-hit cube never spills past its own edge. */
+  function addPips(k){
+    const side = SUPER / S;
+    const n = k.maxHp || 1;
+    const pad = side * 0.1;
+    const avail = side - pad * 2;
+    const perRow = Math.max(1, Math.min(n, Math.floor(avail / (side * 0.09))));
+    const rows = Math.ceil(n / perRow);
+    const gapx = perRow > 1 ? avail / (perRow - 1) : 0;
+    const pr = clamp(perRow > 1 ? gapx * 0.34 : side * 0.07, side * 0.012, side * 0.07);
+    const rowH = pr * 2 + side * 0.02;
+    const bottom = -side / 2 + pad + pr;
+    for(let i = 0; i < n; i++){
+      const row = Math.floor(i / perRow), col = i % perRow;
+      const inRow = Math.min(perRow, n - row * perRow);
+      const px = -((inRow - 1) * gapx) / 2 + col * gapx;
+      const py = bottom + (rows - 1 - row) * rowH;
+      const m = new THREE.Mesh(pipGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      m.scale.setScalar(pr);
+      m.position.set(px, py, side / 2 + 0.02);      // just proud of the front face
+      k.mesh.add(m);
+      k.pips.push(m);
+    }
+  }
+
   function styleBrick(k){
     if(k.sup){
       const m = k.mesh.material;
@@ -232,6 +259,9 @@ function arkanoid3d(canvas, userConfig, opts){
       m.map = tex('brickSuper') || null;
       if(m.map) m.color = new THREE.Color(0xffffff);
       m.needsUpdate = true;
+      for(let i = 0; i < (k.pips || []).length; i++){
+        k.pips[i].material.color = new THREE.Color(i < k.hp ? 0xffffff : 0x1a1a1a);
+      }
       return;
     }
     const pal = cfg.brickColors.length ? cfg.brickColors : DEFAULTS.brickColors;
@@ -271,7 +301,8 @@ function arkanoid3d(canvas, userConfig, opts){
       mesh.position.set(wx(x + SUPER / 2), wy(y + SUPER / 2), SUPER / S / 2 - BRICK_D / 2);
       board.add(mesh);
       const k = { x: x, y: y, w: SUPER, h: SUPER, hp: hp, maxHp: hp,
-                  solid: false, sup: true, pi: 0, mesh: mesh };
+                  solid: false, sup: true, pi: 0, mesh: mesh, pips: [] };
+      addPips(k);
       bricks.push(k);
       styleBrick(k);
     }
@@ -577,6 +608,7 @@ function arkanoid3d(canvas, userConfig, opts){
           board.remove(k.mesh); k.mesh.material.dispose();
           bricks.splice(i, 1);
           if(k.sup){
+            for(const pip of (k.pips || [])) pip.material.dispose();
             burst(k, 4);                  // the cube goes out loudly
             shake = 26;
             score += 2000;
@@ -672,7 +704,7 @@ function arkanoid3d(canvas, userConfig, opts){
       dropMeshes(bricks); dropMeshes(balls); dropMeshes(powerups);
       for(const p of shards){ board.remove(p.mesh); }
       shards = [];
-      brickGeo.dispose(); ballGeo.dispose(); puGeo.dispose(); shardGeo.dispose();
+      brickGeo.dispose(); ballGeo.dispose(); puGeo.dispose(); shardGeo.dispose(); pipGeo.dispose();
       if(paddleGeo) paddleGeo.dispose();
       renderer.dispose();
     }

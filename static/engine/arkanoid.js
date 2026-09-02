@@ -494,12 +494,26 @@ function hitBricks(b){
       roundRect(k.x, k.y, k.w, k.h, 5); ctx.fill();
     }
 
-    // remaining hits, as pips along the bottom edge
-    const n = k.maxHp || 1, pr = 4, gapx = 14;
-    const startX = k.x + k.w / 2 - ((n - 1) * gapx) / 2, cy = k.y + k.h - 12;
+    // Remaining hits, as pips inside the cube. The count is configurable up to
+    // 20, so the row is fitted to the cube's width and wrapped rather than
+    // allowed to spill over the edges.
+    const n = k.maxHp || 1;
+    const pad = Math.max(6, k.w * 0.09);
+    const avail = k.w - pad * 2;
+    const perRow = Math.max(1, Math.min(n, Math.floor(avail / 9)));
+    const rows = Math.ceil(n / perRow);
+    const gapx = perRow > 1 ? avail / (perRow - 1) : 0;
+    const pr = clamp(Math.min(perRow > 1 ? gapx * 0.34 : 4.5, 4.5), 1.6, 4.5);
+    const rowH = pr * 2 + 3;
+    const bottom = k.y + k.h - pad * 0.7;
     for(let i = 0; i < n; i++){
+      const row = Math.floor(i / perRow), col = i % perRow;
+      const inRow = Math.min(perRow, n - row * perRow);
+      const rowW = (inRow - 1) * gapx;
+      const px = k.x + k.w / 2 - rowW / 2 + col * gapx;
+      const py = bottom - (rows - 1 - row) * rowH - pr;
       ctx.beginPath();
-      ctx.arc(startX + i * gapx, cy, pr, 0, Math.PI * 2);
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
       ctx.fillStyle = i < k.hp ? 'rgba(255,255,255,.95)' : 'rgba(0,0,0,.45)';
       ctx.fill();
     }
