@@ -27,27 +27,31 @@ via the `git@github.com:` URL instead.
 ## 2. Create the VM
 
 ```bash
-gcloud compute instances create arcade --project=warsaw-caterpillars --zone=us-central1-a --machine-type=e2-micro --image-family=debian-12 --image-project=debian-cloud --boot-disk-size=30GB --boot-disk-type=pd-standard --tags=http-server,https-server
+gcloud compute instances create arcade --project=arcade-games-kw --zone=us-central1-a --machine-type=e2-micro --image-family=debian-12 --image-project=debian-cloud --boot-disk-size=30GB --boot-disk-type=pd-standard --tags=http-server,https-server
 ```
 
 `us-central1` + `e2-micro` + 30 GB standard disk is what the always-free tier
-covers. `europe-central2` (where warsaw-transport lives) would be about $7/month
-for the same box.
+covers. A European region would be about $7/month for the same box; the game runs
+in the browser, so the extra latency to the US is not noticeable.
+
+The arcade lives in its own project (`arcade-games-kw`, display name "Arcade"),
+separate from anything else you run. The free-tier VM allowance is per *billing
+account*, not per project, so this does not use up an allowance twice.
 
 Open the web ports, if the project doesn't already have these rules:
 
 ```bash
-gcloud compute firewall-rules create allow-http --allow=tcp:80 --target-tags=http-server --project=warsaw-caterpillars
+gcloud compute firewall-rules create allow-http --allow=tcp:80 --target-tags=http-server --project=arcade-games-kw
 ```
 
 ```bash
-gcloud compute firewall-rules create allow-https --allow=tcp:443 --target-tags=https-server --project=warsaw-caterpillars
+gcloud compute firewall-rules create allow-https --allow=tcp:443 --target-tags=https-server --project=arcade-games-kw
 ```
 
 ## 3. Pick the hostname
 
 ```bash
-gcloud compute instances describe arcade --zone=us-central1-a --project=warsaw-caterpillars --format="value(networkInterfaces[0].accessConfigs[0].natIP)"
+gcloud compute instances describe arcade --zone=us-central1-a --project=arcade-games-kw --format="value(networkInterfaces[0].accessConfigs[0].natIP)"
 ```
 
 Take that IP, swap the dots for dashes, and append `.nip.io` — an IP of
@@ -61,11 +65,11 @@ needs to know its own hostname, so you can switch later by re-running step 4.
 ## 4. Install everything
 
 ```bash
-gcloud compute scp --recurse deploy arcade:~ --zone=us-central1-a --project=warsaw-caterpillars
+gcloud compute scp --recurse deploy arcade:~ --zone=us-central1-a --project=arcade-games-kw
 ```
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=warsaw-caterpillars --command="sudo bash ~/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo bash ~/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
 ```
 
 Substitute your own hostname. The script installs Python, git, sqlite3 and Caddy,
@@ -84,11 +88,11 @@ The VM starts with an empty database. Either rebuild your instances through the
 dashboard, or copy the local ones up **once**:
 
 ```bash
-gcloud compute scp --recurse data/arcade.db data/uploads arcade:/tmp/ --zone=us-central1-a --project=warsaw-caterpillars
+gcloud compute scp --recurse data/arcade.db data/uploads arcade:/tmp/ --zone=us-central1-a --project=arcade-games-kw
 ```
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=warsaw-caterpillars --command="sudo systemctl stop arcade && sudo cp /tmp/arcade.db /opt/arcade/app/data/ && sudo cp -r /tmp/uploads /opt/arcade/app/data/ && sudo chown -R arcade:arcade /opt/arcade/app/data && sudo systemctl start arcade"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo systemctl stop arcade && sudo cp /tmp/arcade.db /opt/arcade/app/data/ && sudo cp -r /tmp/uploads /opt/arcade/app/data/ && sudo chown -R arcade:arcade /opt/arcade/app/data && sudo systemctl start arcade"
 ```
 
 After this, **treat the VM as the source of truth** — it accumulates real scores
@@ -109,7 +113,7 @@ git add -A; git commit -m "what changed"; git push
 ```
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=warsaw-caterpillars --command="cd /opt/arcade/app && sudo git pull && sudo systemctl restart arcade"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="cd /opt/arcade/app && sudo git pull && sudo systemctl restart arcade"
 ```
 
 Re-running `setup-vm.sh` does the same thing plus dependency updates, and leaves
@@ -117,23 +121,23 @@ Re-running `setup-vm.sh` does the same thing plus dependency updates, and leaves
 checkout so you always get the current version of the script:
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=warsaw-caterpillars --command="sudo bash /opt/arcade/app/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo bash /opt/arcade/app/deploy/setup-vm.sh https://github.com/karol-w-git/arcade.git 34-71-2-9.nip.io"
 ```
 
 ## 7. Backups (worth doing once players exist)
 
 ```bash
-gcloud storage buckets create gs://arcade-backups-warsaw --location=us-central1 --project=warsaw-caterpillars
+gcloud storage buckets create gs://arcade-backups-kw --location=us-central1 --project=arcade-games-kw
 ```
 
 ```bash
-gcloud compute ssh arcade --zone=us-central1-a --project=warsaw-caterpillars --command="sudo bash ~/deploy/backup.sh gs://arcade-backups-warsaw"
+gcloud compute ssh arcade --zone=us-central1-a --project=arcade-games-kw --command="sudo bash ~/deploy/backup.sh gs://arcade-backups-kw"
 ```
 
 Nightly at 03:00, via root's crontab on the VM:
 
 ```
-0 3 * * * bash /home/YOUR_USER/deploy/backup.sh gs://arcade-backups-warsaw >> /var/log/arcade-backup.log 2>&1
+0 3 * * * bash /home/YOUR_USER/deploy/backup.sh gs://arcade-backups-kw >> /var/log/arcade-backup.log 2>&1
 ```
 
 The VM's service account needs write access to the bucket — grant it with
