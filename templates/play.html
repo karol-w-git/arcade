@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -8,7 +8,7 @@
   html,body{height:100%;margin:0}
   body{
     color:#e8ecf8; font:15px/1.4 system-ui,"Segoe UI",sans-serif;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
     user-select:none;-webkit-user-select:none;touch-action:none;overflow:hidden;
   }
   /* animated background sits behind everything and never eats clicks */
@@ -22,9 +22,9 @@
 
   #hud{display:flex;gap:26px;font-variant-numeric:tabular-nums;letter-spacing:.05em;font-size:14px}
   #hud b{font-weight:600}
-  h1{font-size:16px;font-weight:600;margin:0;opacity:.75;letter-spacing:.02em}
-  #who{font-size:13px;opacity:.6;min-height:18px}
-  canvas{max-width:100vw;max-height:64vh;touch-action:none}
+  #who{font-size:13px;opacity:.55;min-height:16px}
+  /* the board is the point: fill the height, keep its 8:9 shape */
+  canvas{height:min(86vh, calc(96vw * 9 / 8));width:auto;max-width:96vw;touch-action:none;display:block}
   /* the frame is chrome only - without it the board bleeds into the background */
   canvas.framed{border-radius:10px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 18px 60px -20px #000}
   #help{font-size:12.5px;opacity:.45;text-align:center}
@@ -107,15 +107,15 @@
 <div id="bgLayer"></div>
 <div id="logoLayer"></div>
 
-<h1>{{ title }}</h1>
 <div id="hud">
-  <span>SCORE <b id="score">0</b></span>
-  <span>LIVES <b id="lives">3</b></span>
-  <span>LEVEL <b id="level">1</b></span>
+  <span>WYNIK <b id="score">0</b></span>
+  <span>ŻYCIA <b id="lives">3</b></span>
+  <span id="levelBox">POZIOM <b id="level">1</b></span>
+  <span id="timeBox" hidden>CZAS <b id="time">--</b></span>
 </div>
 <div id="who"></div>
 <canvas id="c" width="640" height="720"></canvas>
-<div id="help">Move: mouse / arrows &middot; Launch: click or Space &middot; Pause: Esc &middot; <b>Scores: P</b></div>
+<div id="help">Ruch: mysz / strzałki &middot; Start: klik lub spacja &middot; Pauza: Esc &middot; <b>Wyniki: P</b></div>
 
 <div id="overlay"><div class="sheet" id="sheet"></div></div>
 
@@ -145,7 +145,7 @@ function paintChrome(cfg){
   document.body.style.setProperty('--accent', cfg.accent);
   $('c').classList.toggle('framed', cfg.frame !== false);
   paintOverlay(cfg);
-  for(const id of ['score','lives','level']) $(id).style.color = cfg.accent;
+  for(const id of ['score','lives','level','time']) $(id).style.color = cfg.accent;
   paintBackground(cfg);
 }
 
@@ -201,10 +201,22 @@ function paintBackground(cfg){
 }
 
 /* ---------------- HUD ---------------- */
+const fmtTime = sec => {
+  const t = Math.max(0, Math.ceil(sec));
+  return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+};
+
 const hud = s => {
   $('score').textContent = s.score;
   $('lives').textContent = s.lives;
   $('level').textContent = s.level;
+  const dig = s.mode === 'dig';
+  $('timeBox').hidden = !dig;
+  $('levelBox').hidden = dig;            // in dig mode a level number means nothing
+  if(dig && s.timeLeft !== null && s.timeLeft !== undefined){
+    $('time').textContent = fmtTime(s.timeLeft);
+    $('time').style.color = s.timeLeft <= 10 ? '#ff5d73' : (CONFIG.accent || '');
+  }
 };
 
 /* ---------------- overlays ---------------- */
@@ -221,24 +233,24 @@ function openOverlay(mode, html){
 }
 
 function boardHtml(highlight){
-  if(!SCORES.length) return '<div class="none">No scores yet. Be the first.</div>';
+  if(!SCORES.length) return '<div class="none">Brak wyników. Bądź pierwszy.</div>';
   return '<ol class="board">' + SCORES.map((s, i) =>
     '<li class="' + (highlight && s === highlight ? 'me' : '') + '">' +
       '<span class="rank">' + (i + 1) + '</span>' +
       '<span class="nm">' + esc(s.name) + '</span>' +
-      '<span class="lv">lv ' + s.level + '</span>' +
+      '<span class="lv"></span>' +
       '<span class="sc">' + s.score + '</span>' +
     '</li>').join('') + '</ol>';
 }
 
 function askName(){
   openOverlay('name',
-    '<h2>Who’s playing?</h2>' +
-    '<p>Your score goes on the board under this name.</p>' +
-    '<input type="text" id="nameInput" maxlength="24" placeholder="Player name" autocomplete="off">' +
+    '<h2>Kto gra?</h2>' +
+    '<p>Twój wynik trafi na listę pod tą nazwą.</p>' +
+    '<input type="text" id="nameInput" maxlength="24" placeholder="Imię gracza" autocomplete="off">' +
     '<div class="btns">' +
       '<button class="b primary" id="startBtn">Start</button>' +
-      '<button class="b" id="boardBtn">Scores (P)</button>' +
+      '<button class="b" id="boardBtn">Wyniki (P)</button>' +
     '</div>');
   const input = $('nameInput');
   input.value = player || '';
@@ -250,10 +262,10 @@ function askName(){
 
 function showBoard(){
   openOverlay('board',
-    '<h2>High scores</h2>' +
-    '<p>' + (SCORES.length ? 'Top ' + SCORES.length + ' on this game.' : 'Nothing here yet.') + '</p>' +
+    '<h2>Najlepsze wyniki</h2>' +
+    '<p>' + (SCORES.length ? 'Czołówka tej gry.' : 'Jeszcze nikt nie grał.') + '</p>' +
     boardHtml(lastScore) +
-    '<div class="btns"><button class="b primary" id="closeBtn">Back (P)</button></div>');
+    '<div class="btns"><button class="b primary" id="closeBtn">Wróć (P)</button></div>');
   $('closeBtn').onclick = () => backFromBoard();
 }
 
@@ -266,15 +278,22 @@ function backFromBoard(){
 function gameOver(res){
   lastScore = null;
   const submit = SLUG ? postScore(res) : Promise.resolve();
+  const title = res.won ? 'Wygrana!' : (res.timedOut ? 'Koniec czasu' : 'Koniec gry');
+  let sub = esc(player || 'Gracz');
+  if(res.won && res.timeLeft !== null && res.timeLeft !== undefined){
+    sub += ' — zostało ' + fmtTime(res.timeLeft);
+  } else if(CONFIG.mode !== 'dig'){
+    sub += ' — poziom ' + res.level;
+  }
   openOverlay('over',
-    '<h2>Game over</h2>' +
-    '<p>' + esc(player || 'Player') + ' — level ' + res.level + '</p>' +
+    '<h2>' + title + '</h2>' +
+    '<p>' + sub + '</p>' +
     '<div class="big">' + res.score + '</div>' +
-    '<div id="rankLine" class="none">Saving…</div>' +
+    '<div id="rankLine" class="none">Zapisywanie…</div>' +
     '<div class="btns">' +
-      '<button class="b primary" id="againBtn">Play again</button>' +
-      '<button class="b" id="nextBtn">Next player</button>' +
-      '<button class="b" id="boardBtn2">Scores (P)</button>' +
+      '<button class="b primary" id="againBtn">Zagraj ponownie</button>' +
+      '<button class="b" id="nextBtn">Następny gracz</button>' +
+      '<button class="b" id="boardBtn2">Wyniki (P)</button>' +
     '</div>');
   $('againBtn').onclick = () => { closeOverlay(); game.restart(CONFIG); };
   $('nextBtn').onclick  = () => { player = ''; askName(); };
@@ -283,9 +302,9 @@ function gameOver(res){
   submit.then(rank => {
     const line = $('rankLine');
     if(!line) return;
-    if(!SLUG) line.textContent = 'Preview — scores are not saved.';
-    else if(rank > 0) line.textContent = 'Rank #' + rank + ' of ' + SCORES.length + '.';
-    else line.textContent = 'Saved.';
+    if(!SLUG) line.textContent = 'Podgląd — wyniki nie są zapisywane.';
+    else if(rank > 0) line.textContent = 'Miejsce ' + rank + ' z ' + SCORES.length + '.';
+    else line.textContent = 'Zapisano.';
   });
 }
 
@@ -293,22 +312,22 @@ async function postScore(res){
   try{
     const r = await fetch('/g/' + SLUG + '/scores', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: TOKEN, name: player || 'Anonymous',
+      body: JSON.stringify({ token: TOKEN, name: player || 'Gracz',
                              score: res.score, level: res.level })
     });
     if(!r.ok) return 0;
     const data = await r.json();
     TOKEN = data.token;
     SCORES = data.scores;
-    lastScore = SCORES.find(s => s.name === (player || 'Anonymous') && s.score === res.score) || null;
+    lastScore = SCORES.find(s => s.name === (player || 'Gracz') && s.score === res.score) || null;
     return lastScore ? SCORES.indexOf(lastScore) + 1 : 0;
   } catch(_e){ return 0; }
 }
 
 /* ---------------- start / restart ---------------- */
 function begin(name){
-  player = (name || '').trim().slice(0, 24) || 'Anonymous';
-  $('who').textContent = 'Playing as ' + player;
+  player = (name || '').trim().slice(0, 24) || 'Gracz';
+  $('who').textContent = 'Gra: ' + player;
   closeOverlay();
   if(game) game.restart(CONFIG);
   else game = makeGame();
@@ -329,8 +348,8 @@ paintChrome(CONFIG);
 
 if(PREVIEW || !CONFIG.askName){
   // The editor preview plays immediately - no name gate in the way of design work.
-  player = PREVIEW ? 'Preview' : 'Anonymous';
-  if(!PREVIEW) $('who').textContent = 'Playing as ' + player;
+  player = PREVIEW ? 'Podgląd' : 'Gracz';
+  if(!PREVIEW) $('who').textContent = 'Gra: ' + player;
   game = makeGame();
 } else {
   game = makeGame();

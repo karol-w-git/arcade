@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ title }} — locked</title>
+<title>{{ title }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
@@ -11,14 +11,14 @@
   <div class="auth">
     <div class="card">
       <h2>{{ title }}</h2>
-      <p class="sub">This game is password protected.</p>
+      <p class="sub">Ta gra jest zabezpieczona hasłem.</p>
       {% if error %}<div class="err">{{ error }}</div>{% endif %}
       <form method="post">
         <div class="field">
-          <label for="password">Password</label>
+          <label for="password">Hasło</label>
           <input type="password" id="password" name="password" autofocus autocomplete="off">
         </div>
-        <button class="btn primary" type="submit" style="width:100%;justify-content:center">Play</button>
+        <button class="btn primary" type="submit" style="width:100%;justify-content:center">Graj</button>
       </form>
     </div>
   </div>

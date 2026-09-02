@@ -19,7 +19,8 @@ const DEFAULTS = {
   paddleColor: '#e8ecf8', ballColor: '#e8ecf8',
   brickColors: ['#f72585', '#b5179e', '#7209b7', '#4361ee', '#4cc9f0', '#3ddc97', '#ffd166', '#ff8c42'],
   grid: true, lives: 3, ballSpeed: 7.2, paddleWidth: 110,
-  powerups: true, particles: true, level: 0, boardAlpha: 1, sprites: {},
+  powerups: false, particles: true, level: 0, boardAlpha: 1, sprites: {},
+  mode: 'classic', timeLimit: 90, superHp: 3,
   tiltX: 0.22, tiltY: 0.17     // radians; how far the board leans
 };
 
@@ -35,6 +36,27 @@ const LEVELS = [
   ['1........1','.1......1.','..122221..','..123321..','..122221..','.1......1.','1........1','..........'],
   ['2222222222','2........2','2.X3333X.2','2.3....3.2','2.X3333X.2','2........2','2222222222','..........'],
   ['.3.3.3.3..','3.3.3.3.3.','.2.2.2.2..','2.2.2.2.2.','.X.1.1.X..','1.1.1.1.1.','.1.1.1.1..','..........']
+];
+
+/* Dig mode, identical to the 2D engine: 'S' is the top-left cell of a 2x2
+   superblock, walled in at top middle with a hard cap underneath. */
+const DIG_LEVELS = [
+  ['2222222222',
+   '111XSSX111',
+   '111XSSX111',
+   '1113333111',
+   '.11111111.',
+   '..111111..',
+   '..........',
+   '..........'],
+  ['1111111111',
+   '111XSSX111',
+   '111XSSX111',
+   '11X3333X11',
+   '1111111111',
+   '..222222..',
+   '..........',
+   '..........']
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -79,9 +101,11 @@ function arkanoid3d(canvas, userConfig, opts){
   let cfg = Object.assign({}, DEFAULTS, userConfig || {});
   let bricks = [], balls = [], powerups = [], shards = [], paddle;
   let score, lives, level, state, shake = 0, raf;
+  let timeLeft = null, lastTick = null;
   let dead = false, blocked = false, reported = false;
 
-  const hud = () => onHud && onHud({ score, lives, level: level + 1, state });
+  const hud = () => onHud && onHud({ score, lives, level: level + 1, state,
+                                     timeLeft: timeLeft, mode: cfg.mode });
 
   // board pixels -> world units
   const wx = x => (x - W / 2) / S;
@@ -149,6 +173,7 @@ function arkanoid3d(canvas, userConfig, opts){
   })();
 
   const brickGeo = beveledBox(BW / S, BH / S, BRICK_D, 0.06);
+  const superGeo = beveledBox((BW * 2 + GAP) / S, (BH * 2 + GAP) / S, BRICK_D * 1.5, 0.1);
   const shardGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
   const ballGeo = new THREE.SphereGeometry(7 / S, 20, 16);
   const puGeo = beveledBox(22 / S, 22 / S, 0.3, 0.06);
@@ -197,6 +222,17 @@ function arkanoid3d(canvas, userConfig, opts){
   }
 
   function styleBrick(k){
+    if(k.sup){
+      const m = k.mesh.material;
+      const acc = new THREE.Color(cfg.accent);
+      const wear = 1 - (k.hp / (k.maxHp || 1));
+      m.color = acc.clone().multiplyScalar(1 - wear * 0.45);
+      m.emissive = acc.clone().multiplyScalar(0.35);
+      m.map = tex('brickSuper') || null;
+      if(m.map) m.color = new THREE.Color(0xffffff);
+      m.needsUpdate = true;
+      return;
+    }
     const pal = cfg.brickColors.length ? cfg.brickColors : DEFAULTS.brickColors;
     const base = k.solid ? '#5b6684' : pal[k.pi % pal.length];
     const t = tex(k.solid ? 'brickSolid' : 'brick' + clamp(k.hp, 1, 3));
@@ -215,13 +251,33 @@ function arkanoid3d(canvas, userConfig, opts){
     list.length = 0;
   }
 
+  const digMode = () => cfg.mode === 'dig';
+
   function makeBricks(idx){
     dropMeshes(bricks);
-    const layout = LEVELS[idx % LEVELS.length];
+    const set = digMode() ? DIG_LEVELS : LEVELS;
+    const layout = set[idx % set.length];
+    const taken = {};
     for(let r = 0; r < ROWS; r++) for(let c = 0; c < COLS; c++){
       const ch = (layout[r] || '')[c] || '.';
-      if(ch === '.') continue;
+      if(ch === '.' || taken[r + ',' + c]) continue;
       const x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
+
+      if(ch === 'S'){
+        taken[r + ',' + (c + 1)] = taken[(r + 1) + ',' + c] = taken[(r + 1) + ',' + (c + 1)] = 1;
+        const hp = clamp(+cfg.superHp || 3, 1, 20);
+        const w = BW * 2 + GAP, h = BH * 2 + GAP;
+        const mesh = new THREE.Mesh(superGeo, new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.1 }));
+        mesh.castShadow = true;
+        mesh.position.set(wx(x + w / 2), wy(y + h / 2), BRICK_D * 0.25);
+        board.add(mesh);
+        const k = { x: x, y: y, w: w, h: h, hp: hp, maxHp: hp,
+                    solid: false, sup: true, pi: 0, mesh: mesh };
+        bricks.push(k);
+        styleBrick(k);
+        continue;
+      }
+
       const mesh = new THREE.Mesh(brickGeo, new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.05 }));
       mesh.castShadow = true;
       mesh.position.set(wx(x + BW / 2), wy(y + BH / 2), 0);
@@ -263,6 +319,8 @@ function arkanoid3d(canvas, userConfig, opts){
   function newGame(){
     for(const p of shards){ board.remove(p.mesh); }
     shards = [];
+    timeLeft = cfg.mode === 'dig' ? clamp(+cfg.timeLimit || 90, 15, 600) : null;
+    lastTick = null;
     score = 0;
     lives = clamp(+cfg.lives || 3, 1, 9);
     shake = 0; reported = false;
@@ -407,6 +465,19 @@ function arkanoid3d(canvas, userConfig, opts){
 
   // ---------------- physics: a straight port of the 2D engine ----------------
   function step(){
+    if(timeLeft !== null && state === 'play'){
+      const now = performance.now();
+      if(lastTick !== null) timeLeft = Math.max(0, timeLeft - (now - lastTick) / 1000);
+      lastTick = now;
+      if(timeLeft <= 0){
+        state = 'over'; hud();
+        if(!reported){ reported = true; onGameOver && onGameOver({ score: score, level: level + 1, won: false, timedOut: true }); }
+        return;
+      }
+    } else {
+      lastTick = null;
+    }
+
     if(keys.ArrowLeft)  paddle.x -= paddle.speed;
     if(keys.ArrowRight) paddle.x += paddle.speed;
     paddle.x = clamp(paddle.x, 0, W - paddle.w);
@@ -467,7 +538,7 @@ function arkanoid3d(canvas, userConfig, opts){
     for(const p of gone){ board.remove(p.mesh); p.mesh.material.dispose(); }
     powerups = powerups.filter(p => !p.dead && p.y < H + 40);
 
-    if(bricks.every(k => k.hp === Infinity)){
+    if(!digMode() && bricks.every(k => k.hp === Infinity)){
       score += 500;
       startLevel(level + 1);
     }
@@ -489,9 +560,19 @@ function arkanoid3d(canvas, userConfig, opts){
         k.hp--;
         if(k.hp <= 0){
           burst(k);
-          maybeDrop(k.x + k.w / 2 - 11, k.y);
           board.remove(k.mesh); k.mesh.material.dispose();
           bricks.splice(i, 1);
+          if(k.sup){
+            score += 2000;
+            state = 'won'; hud();
+            if(!reported){
+              reported = true;
+              onGameOver && onGameOver({ score: score, level: level + 1, won: true,
+                                         timeLeft: timeLeft === null ? null : Math.round(timeLeft) });
+            }
+            return;
+          }
+          maybeDrop(k.x + k.w / 2 - 11, k.y);
           score += 100;
         } else {
           styleBrick(k);

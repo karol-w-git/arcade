@@ -20,8 +20,11 @@ const DEFAULTS = {
   lives: 3,
   ballSpeed: 7.2,
   paddleWidth: 110,
-  powerups: true,
+  powerups: false,  // off by default now; per-instance switch brings them back
   particles: true,  // debris burst when a brick breaks
+  mode: 'classic',  // 'classic' clears the board; 'dig' races a clock to the superblock
+  timeLimit: 90,    // seconds (dig)
+  superHp: 3,       // hits to break the superblock (dig)
   level: 0,         // starting level index
   boardAlpha: 1,    // 0 lets the page background show through the board
   sprites: {}
@@ -34,6 +37,28 @@ const LEVELS = [
   ['1........1','.1......1.','..122221..','..123321..','..122221..','.1......1.','1........1','..........'],
   ['2222222222','2........2','2.X3333X.2','2.3....3.2','2.X3333X.2','2........2','2222222222','..........'],
   ['.3.3.3.3..','3.3.3.3.3.','.2.2.2.2..','2.2.2.2.2.','.X.1.1.X..','1.1.1.1.1.','.1.1.1.1..','..........']
+];
+
+/* Dig mode. 'S' marks the top-left cell of a 2x2 superblock; 'X' is unbreakable.
+   The superblock sits top-middle, flanked by walls, with a hard cap underneath -
+   the only way in is straight up through the middle. */
+const DIG_LEVELS = [
+  ['2222222222',
+   '111XSSX111',
+   '111XSSX111',
+   '1113333111',
+   '.11111111.',
+   '..111111..',
+   '..........',
+   '..........'],
+  ['1111111111',
+   '111XSSX111',
+   '111XSSX111',
+   '11X3333X11',
+   '1111111111',
+   '..222222..',
+   '..........',
+   '..........'],
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -62,9 +87,11 @@ function arkanoid(cv, userConfig, opts){
   let cfg = Object.assign({}, DEFAULTS, userConfig || {});
   let bricks, balls, powerups, paddle, score, lives, level, state, shake, raf;
   let shards = [];
+  let timeLeft = null, lastTick = null;
   let dead = false, blocked = false, reported = false;
 
-  const hud = () => onHud && onHud({ score, lives, level: level + 1, state });
+  const hud = () => onHud && onHud({ score, lives, level: level + 1, state,
+                                     timeLeft: timeLeft, mode: cfg.mode });
 
   // ---- sprites: decoded once per URL, redrawn as soon as they land ----
   let sprites = {};
@@ -93,15 +120,28 @@ function arkanoid(cv, userConfig, opts){
     ctx.drawImage(img, x, y, w, h);
   }
 
+  const digMode = () => cfg.mode === 'dig';
+
   function makeBricks(idx){
-    const layout = LEVELS[idx % LEVELS.length];
+    const set = digMode() ? DIG_LEVELS : LEVELS;
+    const layout = set[idx % set.length];
     const pal = cfg.brickColors.length ? cfg.brickColors : DEFAULTS.brickColors;
     const out = [];
+    const taken = {};                     // cells swallowed by the superblock
     for(let r = 0; r < ROWS; r++) for(let c = 0; c < COLS; c++){
       const ch = (layout[r] || '')[c] || '.';
-      if(ch === '.') continue;
+      if(ch === '.' || taken[r + ',' + c]) continue;
+      const x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
+      if(ch === 'S'){
+        // only the top-left S of the 2x2 becomes a brick; the rest are consumed
+        taken[r + ',' + (c + 1)] = taken[(r + 1) + ',' + c] = taken[(r + 1) + ',' + (c + 1)] = 1;
+        out.push({ x: x, y: y, w: BW * 2 + GAP, h: BH * 2 + GAP,
+                   hp: clamp(+cfg.superHp || 3, 1, 20), maxHp: clamp(+cfg.superHp || 3, 1, 20),
+                   pi: 0, solid: false, sup: true });
+        continue;
+      }
       out.push({
-        x: OX + c * (BW + GAP), y: OY + r * (BH + GAP), w: BW, h: BH,
+        x: x, y: y, w: BW, h: BH,
         hp: ch === 'X' ? Infinity : +ch,
         pi: (r + (+ch || 0)) % pal.length,     // palette index, resolved at draw time
         solid: ch === 'X'
@@ -131,6 +171,8 @@ function arkanoid(cv, userConfig, opts){
 
   function newGame(){
     shards = [];
+    timeLeft = cfg.mode === 'dig' ? clamp(+cfg.timeLimit || 90, 15, 600) : null;
+    lastTick = null;
     score = 0;
     lives = clamp(+cfg.lives || 3, 1, 9);
     shake = 0;
@@ -215,6 +257,19 @@ function arkanoid(cv, userConfig, opts){
 
   // ---- physics ----
   function step(){
+    if(timeLeft !== null && state === 'play'){
+      const now = performance.now();
+      if(lastTick !== null) timeLeft = Math.max(0, timeLeft - (now - lastTick) / 1000);
+      lastTick = now;
+      if(timeLeft <= 0){
+        state = 'over'; hud();
+        if(!reported){ reported = true; onGameOver && onGameOver({ score, level: level + 1, won: false, timedOut: true }); }
+        return;
+      }
+    } else {
+      lastTick = null;
+    }
+
     if(keys.ArrowLeft)  paddle.x -= paddle.speed;
     if(keys.ArrowRight) paddle.x += paddle.speed;
     paddle.x = clamp(paddle.x, 0, W - paddle.w);
@@ -339,8 +394,18 @@ function hitBricks(b){
         k.hp--;
         if(k.hp <= 0){
           burst(k, pal2(k));
-          maybeDrop(k.x + k.w / 2 - 11, k.y);
           bricks.splice(i, 1);
+          if(k.sup){
+            score += 2000;
+            state = 'won'; hud();
+            if(!reported){
+              reported = true;
+              onGameOver && onGameOver({ score, level: level + 1, won: true,
+                                         timeLeft: timeLeft === null ? null : Math.round(timeLeft) });
+            }
+            return;
+          }
+          maybeDrop(k.x + k.w / 2 - 11, k.y);
           score += 100;
         } else {
           score += 25;
@@ -350,6 +415,30 @@ function hitBricks(b){
       shake = Math.max(shake, 4);
       return; // at most one brick per substep
     }
+  }
+
+  function drawSuper(k){
+    const img = sprite('brickSuper');
+    if(img){ drawSprite(img, k.x, k.y, k.w, k.h); return; }
+    const t = Date.now() / 600;
+    ctx.save();
+    ctx.shadowColor = cfg.accent;
+    ctx.shadowBlur = 16 + Math.sin(t) * 6;          // a slow pulse: this is the target
+    ctx.fillStyle = darken(cfg.accent, (1 - k.hp / (k.maxHp || 1)) * 0.45);
+    roundRect(k.x, k.y, k.w, k.h, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2;
+    roundRect(k.x + 2, k.y + 2, k.w - 4, k.h - 4, 6); ctx.stroke();
+    // remaining hits, as pips across the middle
+    const n = k.maxHp || 1, pr = 4, gapx = 14;
+    const startX = k.x + k.w / 2 - ((n - 1) * gapx) / 2, cy = k.y + k.h / 2;
+    for(let i = 0; i < n; i++){
+      ctx.beginPath();
+      ctx.arc(startX + i * gapx, cy, pr, 0, Math.PI * 2);
+      ctx.fillStyle = i < k.hp ? 'rgba(255,255,255,.92)' : 'rgba(0,0,0,.35)';
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // ---- render ----
@@ -388,6 +477,7 @@ function hitBricks(b){
 
     const pal = cfg.brickColors.length ? cfg.brickColors : DEFAULTS.brickColors;
     for(const k of bricks){
+      if(k.sup){ drawSuper(k); continue; }
       const img = sprite(k.solid ? 'brickSolid' : 'brick' + clamp(k.hp, 1, 3));
       if(img){ drawSprite(img, k.x, k.y, k.w, k.h); continue; }
       // Damage is shown by darkening, never by alpha - a see-through board would
@@ -438,7 +528,7 @@ function hitBricks(b){
     }
     // When a shell is listening it draws its own game-over UI (score submit,
     // next player), so we only dim the board.
-    if(state === 'over' && onGameOver){
+    if((state === 'over' || state === 'won') && onGameOver){
       ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, W, H);
     }
     if(state === 'over' && !onGameOver){

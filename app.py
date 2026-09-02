@@ -70,7 +70,12 @@ GAME_TYPES = {
             "lives": 3,
             "ballSpeed": 7.2,
             "paddleWidth": 110,
-            "powerups": True,
+            # classic = clear the board; dig = break through to the superblock
+            # before the clock runs out
+            "mode": "classic",
+            "timeLimit": 90,          # seconds, dig mode only
+            "superHp": 3,             # hits to break the superblock
+            "powerups": False,        # off by default; switch back on per instance
             "level": 0,
             "bgStyle": "radial",
             # chrome around the play area: border, rounded corners, drop shadow
@@ -293,6 +298,10 @@ def clean_config(game_type: str, raw: dict) -> dict:
     out["ballSpeed"] = max(3.0, min(14.0, float(out["ballSpeed"])))
     out["paddleWidth"] = max(50, min(260, int(out["paddleWidth"])))
     out["level"] = max(0, min(3, int(out["level"])))
+    out["timeLimit"] = max(15, min(600, int(out["timeLimit"])))
+    out["superHp"] = max(1, min(20, int(out["superHp"])))
+    if out.get("mode") not in ("classic", "dig"):
+        out["mode"] = "classic"
     out["boardAlpha"] = max(0.0, min(1.0, float(out["boardAlpha"])))
     for k in ("tiltX", "tiltY"):        # 3D only; radians, kept to a gentle lean
         if k in out:
@@ -636,7 +645,7 @@ def unlock(slug):
         if check_password_hash(row["pw_hash"], request.form.get("password", "")):
             session[f"unlocked:{slug}"] = True
             return redirect(url_for("play", slug=slug))
-        error = "Wrong password."
+        error = "Nieprawid\u0142owe has\u0142o."      # players see Polish; the dashboard stays English
         time.sleep(0.4)
     return render_template("unlock.html", title=row["title"], slug=slug, error=error)
 
