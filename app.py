@@ -36,7 +36,7 @@ PROD = _flag("ARCADE_PROD")
 BEHIND_PROXY = _flag("ARCADE_BEHIND_PROXY") or PROD
 DEBUG = _flag("ARCADE_DEBUG")
 
-MAX_SPRITE_BYTES = 512 * 1024
+MAX_SPRITE_BYTES = 2 * 1024 * 1024
 # Raster only. SVG can carry <script>, which would run if a player opened the
 # file's URL directly, so it is not accepted.
 SPRITE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
@@ -46,7 +46,10 @@ MAX_BG_HTML = 20000
 # Which parts of a game can carry a custom image.
 SPRITE_SLOTS = ["paddle", "ball", "brick1", "brick2", "brick3", "brickSolid",
                 "powerupWide", "powerupMulti", "powerupSlow", "powerupLife",
-                "boardBg"]
+                "boardBg",
+                # a transparent PNG laid over the background, behind the board -
+                # company logos at events. Handled by the page, not the engine.
+                "overlay"]
 
 GAME_TYPES = {
     "arkanoid": {
@@ -80,6 +83,13 @@ GAME_TYPES = {
             "bgMode": "color",
             "bgPreset": "starfield",
             "bgHtml": "",
+            # logo overlay: sits above the background, behind the play area
+            "overlayPos": "center",
+            "overlaySize": 40,        # % of the smaller viewport dimension
+            "overlayOpacity": 0.5,
+            "overlayTile": False,
+            # draw the logo over the play area (a watermark) instead of behind it
+            "overlayFront": False,
             # player names + leaderboard
             "askName": True,
             "scoreboard": True,
@@ -293,6 +303,11 @@ def clean_config(game_type: str, raw: dict) -> dict:
         out["bgMode"] = "color"
     if out.get("bgPreset") not in ("starfield", "aurora", "scanlines", "drift"):
         out["bgPreset"] = "starfield"
+    if out.get("overlayPos") not in ("center", "top", "bottom", "top-left",
+                                     "top-right", "bottom-left", "bottom-right"):
+        out["overlayPos"] = "center"
+    out["overlaySize"] = max(5, min(100, int(out["overlaySize"])))
+    out["overlayOpacity"] = max(0.0, min(1.0, float(out["overlayOpacity"])))
     return out
 
 
@@ -470,7 +485,7 @@ def api_sprite_upload(iid):
 
     blob = file.read(MAX_SPRITE_BYTES + 1)
     if len(blob) > MAX_SPRITE_BYTES:
-        return jsonify(error="Image is over 512 KB"), 413
+        return jsonify(error="Image is over 2 MB"), 413
 
     folder = UPLOAD_DIR / str(iid)
     folder.mkdir(parents=True, exist_ok=True)
@@ -628,7 +643,7 @@ def unlock(slug):
 
 @app.errorhandler(413)
 def _too_big(_e):
-    return jsonify(error="Image is over 512 KB"), 413
+    return jsonify(error="Image is over 2 MB"), 413
 
 
 @app.after_request

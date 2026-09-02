@@ -128,9 +128,42 @@
       </div>
 
       <div class="panel">
+        <h3>Logo overlay</h3>
+        <div class="hint" style="margin:-6px 0 14px">
+          A transparent PNG laid over the background, behind the play area — company
+          logos for events. Never intercepts clicks.
+        </div>
+        <div class="sprites" id="overlaySlot"></div>
+        <div class="two" style="margin-top:14px">
+          <div class="field"><label for="overlaySize">Size <b id="overlaySizeV"></b></label>
+            <input type="range" id="overlaySize" min="5" max="100" step="1"></div>
+          <div class="field"><label for="overlayOpacity">Opacity <b id="overlayOpacityV"></b></label>
+            <input type="range" id="overlayOpacity" min="0" max="1" step="0.05"></div>
+        </div>
+        <div class="field">
+          <label for="overlayPos">Position</label>
+          <select id="overlayPos">
+            <option value="center">Centred</option>
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom-right">Bottom right</option>
+          </select>
+        </div>
+        <label class="check" style="margin-bottom:10px"><input type="checkbox" id="overlayTile"> Tile it across the screen</label>
+        <label class="check"><input type="checkbox" id="overlayFront"> Draw over the play area (watermark)</label>
+        <div class="hint">
+          Behind the board, a centred logo is hidden unless the board is see-through —
+          use a corner, or turn this on.
+        </div>
+      </div>
+
+      <div class="panel">
         <h3>Sprites</h3>
         <div class="hint" style="margin:-6px 0 14px">
-          PNG / JPG / GIF / WebP, up to 512 KB each. Empty slots keep the drawn shapes.
+          PNG / JPG / GIF / WebP, up to 2 MB each. Empty slots keep the drawn shapes.
           Animated GIFs do not animate on canvas — use the background for motion.
         </div>
         <div class="sprites" id="sprites"></div>
@@ -202,19 +235,20 @@
 <script>
 const INSTANCE_ID = {{ instance.id if instance else 'null' }};
 const GAME_TYPE = {{ game_type|tojson }};
-const SPRITE_SLOTS = {{ sprite_slots|tojson }};
+const ALL_SLOTS = {{ sprite_slots|tojson }};
+const SPRITE_SLOTS = ALL_SLOTS.filter(s => s !== 'overlay');
 const SLOT_LABELS = {
   paddle:'Paddle', ball:'Ball', brick1:'Brick (1 hit)', brick2:'Brick (2 hits)',
   brick3:'Brick (3 hits)', brickSolid:'Unbreakable brick', powerupWide:'Power-up: wide',
   powerupMulti:'Power-up: multiball', powerupSlow:'Power-up: slow', powerupLife:'Power-up: life',
-  boardBg:'Board background image'
+  boardBg:'Board background image', overlay:'Logo (transparent PNG)'
 };
 let config = {{ config|tojson }};
 config.sprites = config.sprites || {};
 
 const $ = id => document.getElementById(id);
 const COLOR_KEYS = ['pageBg','bg','accent','paddleColor','ballColor'];
-const NUM_KEYS = ['lives','ballSpeed','paddleWidth','boardAlpha'];
+const NUM_KEYS = ['lives','ballSpeed','paddleWidth','boardAlpha','overlaySize','overlayOpacity'];
 const PRESETS = {
   'Midnight':  { pageBg:'#0a0c14', bg:'#05070f', accent:'#4cc9f0', paddleColor:'#e8ecf8', ballColor:'#e8ecf8',
                  brickColors:['#f72585','#b5179e','#7209b7','#4361ee','#4cc9f0','#3ddc97','#ffd166','#ff8c42'] },
@@ -247,6 +281,23 @@ for(const [name, p] of Object.entries(PRESETS)){
 }
 
 // ---- sprite slots ----
+function spriteRow(slot){
+  const row = document.createElement('div');
+  row.className = 'sprite';
+  row.innerHTML =
+    '<div class="thumb" data-thumb="' + slot + '"></div>' +
+    '<div class="sprite-main">' +
+      '<span class="sprite-name">' + (SLOT_LABELS[slot] || slot) + '</span>' +
+      '<div class="sprite-btns">' +
+        '<label class="btn sm">Upload<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" ' +
+          'data-slot="' + slot + '" hidden></label>' +
+        '<button class="btn sm danger" data-clear="' + slot + '" hidden>Remove</button>' +
+      '</div>' +
+    '</div>';
+  return row;
+}
+$('overlaySlot').appendChild(spriteRow('overlay'));
+
 const spritesEl = $('sprites');
 for(const slot of SPRITE_SLOTS){
   const row = document.createElement('div');
@@ -265,17 +316,18 @@ for(const slot of SPRITE_SLOTS){
 }
 
 function paintSprites(){
-  for(const slot of SPRITE_SLOTS){
+  for(const slot of ALL_SLOTS){
     const url = config.sprites[slot];
-    const thumb = spritesEl.querySelector('[data-thumb="' + slot + '"]');
-    const clear = spritesEl.querySelector('[data-clear="' + slot + '"]');
+    const thumb = document.querySelector('[data-thumb="' + slot + '"]');
+    const clear = document.querySelector('[data-clear="' + slot + '"]');
+    if(!thumb || !clear) continue;
     thumb.style.backgroundImage = url ? 'url("' + url + '?v=' + (config._v || 0) + '")' : '';
     thumb.classList.toggle('empty', !url);
     clear.hidden = !url;
   }
 }
 
-spritesEl.addEventListener('change', async e => {
+document.addEventListener('change', async e => {
   const input = e.target.closest('input[type=file]');
   if(!input || !input.files.length) return;
   const slot = input.dataset.slot, file = input.files[0];
@@ -300,7 +352,7 @@ spritesEl.addEventListener('change', async e => {
   say('Sprite saved.');
 });
 
-spritesEl.addEventListener('click', async e => {
+document.addEventListener('click', async e => {
   const btn = e.target.closest('[data-clear]');
   if(!btn) return;
   const slot = btn.dataset.clear;
@@ -324,6 +376,9 @@ function toForm(){
   $('bgStyle').value = config.bgStyle || 'radial';
   $('bgMode').value = config.bgMode || 'color';
   $('bgPreset').value = config.bgPreset || 'starfield';
+  $('overlayPos').value = config.overlayPos || 'center';
+  $('overlayTile').checked = !!config.overlayTile;
+  $('overlayFront').checked = !!config.overlayFront;
   $('bgHtml').value = config.bgHtml || '';
   $('level').value = String(config.level || 0);
   for(const k of NUM_KEYS){ $(k).value = config[k]; $(k + 'V').textContent = config[k]; }
@@ -346,12 +401,17 @@ function fromForm(){
   config.bgStyle = $('bgStyle').value;
   config.bgMode = $('bgMode').value;
   config.bgPreset = $('bgPreset').value;
+  config.overlayPos = $('overlayPos').value;
+  config.overlayTile = $('overlayTile').checked;
+  config.overlayFront = $('overlayFront').checked;
   config.bgHtml = $('bgHtml').value.slice(0, 20000);
   config.level = +$('level').value;
   config.lives = +$('lives').value;
   config.ballSpeed = +$('ballSpeed').value;
   config.paddleWidth = +$('paddleWidth').value;
   config.boardAlpha = +$('boardAlpha').value;
+  config.overlaySize = +$('overlaySize').value;
+  config.overlayOpacity = +$('overlayOpacity').value;
   for(const k of NUM_KEYS) $(k + 'V').textContent = config[k];
   showAlpha();
   readTilt();
@@ -372,7 +432,11 @@ function readTilt(){
   $('tiltYV').textContent = Math.round(config.tiltY * 57) + '°';
 }
 
-function showAlpha(){ $('boardAlphaV').textContent = Math.round(config.boardAlpha * 100) + '%'; }
+function showAlpha(){
+  $('boardAlphaV').textContent = Math.round(config.boardAlpha * 100) + '%';
+  $('overlaySizeV').textContent = config.overlaySize + '%';
+  $('overlayOpacityV').textContent = Math.round(config.overlayOpacity * 100) + '%';
+}
 
 function syncBgRows(){
   $('presetRow').style.display = $('bgMode').value === 'preset' ? '' : 'none';

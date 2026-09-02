@@ -4,9 +4,9 @@
 ARCADE_DOMAIN {
 	encode zstd gzip
 
-	# The app caps sprite uploads at 512 KB; refuse anything wilder up front.
+	# The app caps uploads at 2 MB; refuse anything wilder before it reaches Python.
 	request_body {
-		max_size 2MB
+		max_size 4MB
 	}
 
 	reverse_proxy 127.0.0.1:8080 {

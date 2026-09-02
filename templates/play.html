@@ -14,8 +14,11 @@
   /* animated background sits behind everything and never eats clicks */
   #bgLayer{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
   #bgLayer iframe{width:100%;height:100%;border:0;display:block}
+  /* logo overlay: above the background, below the board, never clickable */
+  #logoLayer{position:fixed;inset:0;z-index:1;pointer-events:none;
+             background-repeat:no-repeat;background-position:center}
   /* lift page content above the background - but not #overlay, which must stay fixed */
-  body > *:not(#bgLayer):not(#overlay){position:relative;z-index:1}
+  body > *:not(#bgLayer):not(#logoLayer):not(#overlay){position:relative;z-index:2}
 
   #hud{display:flex;gap:26px;font-variant-numeric:tabular-nums;letter-spacing:.05em;font-size:14px}
   #hud b{font-weight:600}
@@ -102,6 +105,7 @@
 </head>
 <body>
 <div id="bgLayer"></div>
+<div id="logoLayer"></div>
 
 <h1>{{ title }}</h1>
 <div id="hud">
@@ -140,8 +144,31 @@ function paintChrome(cfg){
   document.body.style.color = cfg.paddleColor;
   document.body.style.setProperty('--accent', cfg.accent);
   $('c').classList.toggle('framed', cfg.frame !== false);
+  paintOverlay(cfg);
   for(const id of ['score','lives','level']) $(id).style.color = cfg.accent;
   paintBackground(cfg);
+}
+
+/* A transparent PNG (a logo, typically) layered over the background. Sized as a
+   percentage of the smaller viewport edge so it holds up on any screen. */
+const OVERLAY_POS = {
+  'center': 'center center', 'top': 'center top', 'bottom': 'center bottom',
+  'top-left': 'left top', 'top-right': 'right top',
+  'bottom-left': 'left bottom', 'bottom-right': 'right bottom'
+};
+function paintOverlay(cfg){
+  const layer = $('logoLayer');
+  const url = (cfg.sprites || {}).overlay;
+  if(!url){ layer.style.backgroundImage = 'none'; return; }
+  const pct = Math.max(5, Math.min(100, +cfg.overlaySize || 40));
+  layer.style.backgroundImage = 'url("' + url + '")';
+  layer.style.backgroundSize = cfg.overlayTile ? (pct + 'vmin auto') : ('auto ' + pct + 'vmin');
+  layer.style.backgroundRepeat = cfg.overlayTile ? 'repeat' : 'no-repeat';
+  layer.style.backgroundPosition = cfg.overlayTile ? 'center' : (OVERLAY_POS[cfg.overlayPos] || 'center center');
+  layer.style.opacity = Math.max(0, Math.min(1, cfg.overlayOpacity === undefined ? 0.5 : +cfg.overlayOpacity));
+  // behind the board (1) or over it as a watermark (3) - still never clickable,
+  // and always under the name prompt / leaderboard sheet at 5
+  layer.style.zIndex = cfg.overlayFront ? 3 : 1;
 }
 
 let lastBgKey = null;

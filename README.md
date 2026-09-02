@@ -87,13 +87,27 @@ also `pointer-events: none`, so it never steals a click from the paddle.
 **Debris burst** (Gameplay panel) sprays shards in the brick's colour when it breaks -
 flat squares with gravity in 2D, tumbling cubes in 3D. Off is a single checkbox.
 
+## Logo overlay
+
+A transparent PNG laid over the background for company logos at events. Its own
+panel in the editor: upload, size (% of the smaller viewport edge, so it holds up
+on any screen), opacity, position (centred, an edge, or any corner), tile, and
+whether it sits **behind** the play area or **over** it as a watermark.
+
+The layer is `pointer-events: none`, so it never intercepts a click meant for the
+paddle, and it always sits under the name prompt and leaderboard.
+
+Note that behind the board, a *centred* logo is invisible unless the board is
+partly transparent — put it in a corner, turn the board opacity down, or switch
+it to watermark mode.
+
 ## Sprites
 
 Any of these can carry a custom image, and any slot left empty keeps the drawn shape:
 paddle, ball, brick (1/2/3 hits), unbreakable brick, the four power-ups, and a full board
 background image.
 
-PNG / JPG / GIF / WebP, 512 KB max. Files live in `data/uploads/<instance-id>/` and are
+PNG / JPG / GIF / WebP, 2 MB max. Files live in `data/uploads/<instance-id>/` and are
 served with `Content-Security-Policy: sandbox` and `nosniff`. SVG is rejected on purpose —
 it can carry `<script>` that would run if a player opened the file's URL directly.
 Animated GIFs do not animate once drawn to canvas; use the background for motion.
