@@ -31,6 +31,7 @@ const DEFAULTS = {
 };
 
 const COLS = 10, ROWS = 8, BW = 56, BH = 22, GAP = 4;
+const SUPER = BW * 2 + GAP;   // the superblock is square: a cube, not a slab
 
 const LEVELS = [
   ['..........','.11111111.','.11111111.','.22222222.','..........','..........','..........','..........'],
@@ -43,22 +44,22 @@ const LEVELS = [
    The superblock sits top-middle, flanked by walls, with a hard cap underneath -
    the only way in is straight up through the middle. */
 const DIG_LEVELS = [
-  ['2222222222',
+  ['2222SS2222',
+   '111XSSX111',
+   '111XSSX111',
    '111XSSX111',
    '111XSSX111',
    '1113333111',
    '.11111111.',
-   '..111111..',
-   '..........',
-   '..........'],
-  ['1111111111',
-   '111XSSX111',
+   '..111111..'],
+  ['1111SS1111',
+   '11XXSSXX11',
+   '11XXSSXX11',
+   '11XXSSXX11',
    '111XSSX111',
    '11X3333X11',
    '1111111111',
-   '..222222..',
-   '..........',
-   '..........'],
+   '..222222..']
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -87,7 +88,7 @@ function arkanoid(cv, userConfig, opts){
   let cfg = Object.assign({}, DEFAULTS, userConfig || {});
   let bricks, balls, powerups, paddle, score, lives, level, state, shake, raf;
   let shards = [];
-  let timeLeft = null, lastTick = null;
+  let timeLeft = null, lastTick = null, wonAt = 0;
   let dead = false, blocked = false, reported = false;
 
   const hud = () => onHud && onHud({ score, lives, level: level + 1, state,
@@ -127,19 +128,24 @@ function arkanoid(cv, userConfig, opts){
     const layout = set[idx % set.length];
     const pal = cfg.brickColors.length ? cfg.brickColors : DEFAULTS.brickColors;
     const out = [];
-    const taken = {};                     // cells swallowed by the superblock
+
+    // every 'S' cell is a pocket for the cube; the cube itself is one square
+    // brick anchored at the top-left of that pocket
+    let sr = -1, scol = -1;
+    for(let r = 0; r < ROWS; r++) for(let c = 0; c < COLS; c++){
+      if(((layout[r] || '')[c] || '.') === 'S' && sr < 0){ sr = r; scol = c; }
+    }
+    if(sr >= 0){
+      const hp = clamp(+cfg.superHp || 3, 1, 20);
+      out.push({ x: OX + scol * (BW + GAP), y: OY + sr * (BH + GAP),
+                 w: SUPER, h: SUPER, hp: hp, maxHp: hp,
+                 pi: 0, solid: false, sup: true });
+    }
+
     for(let r = 0; r < ROWS; r++) for(let c = 0; c < COLS; c++){
       const ch = (layout[r] || '')[c] || '.';
-      if(ch === '.' || taken[r + ',' + c]) continue;
+      if(ch === '.' || ch === 'S') continue;
       const x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
-      if(ch === 'S'){
-        // only the top-left S of the 2x2 becomes a brick; the rest are consumed
-        taken[r + ',' + (c + 1)] = taken[(r + 1) + ',' + c] = taken[(r + 1) + ',' + (c + 1)] = 1;
-        out.push({ x: x, y: y, w: BW * 2 + GAP, h: BH * 2 + GAP,
-                   hp: clamp(+cfg.superHp || 3, 1, 20), maxHp: clamp(+cfg.superHp || 3, 1, 20),
-                   pi: 0, solid: false, sup: true });
-        continue;
-      }
       out.push({
         x: x, y: y, w: BW, h: BH,
         hp: ch === 'X' ? Infinity : +ch,
@@ -257,6 +263,11 @@ function arkanoid(cv, userConfig, opts){
 
   // ---- physics ----
   function step(){
+    if(state === 'won'){          // the win animation: debris only
+      stepShards();
+      if(shake > 0) shake--;
+      return;
+    }
     if(timeLeft !== null && state === 'play'){
       const now = performance.now();
       if(lastTick !== null) timeLeft = Math.max(0, timeLeft - (now - lastTick) / 1000);
@@ -337,17 +348,18 @@ function arkanoid(cv, userConfig, opts){
     return k.solid ? '#5b6684' : pal[k.pi % pal.length];
   }
 
-  function burst(k, color){
+  function burst(k, color, mult){
     if(!cfg.particles) return;
-    const n = 18;
+    const n = Math.round(18 * (mult || 1));
     for(let i = 0; i < n; i++){
       const a = (Math.PI * 2 * i) / n + Math.random() * 0.5;
       const sp = 1.2 + Math.random() * 2.6;
       shards.push({
         x: k.x + k.w / 2 + (Math.random() - 0.5) * k.w,
         y: k.y + k.h / 2 + (Math.random() - 0.5) * k.h,
-        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1,
-        s: 4 + Math.random() * 5, life: 1, decay: 0.014 + Math.random() * 0.014,
+        vx: Math.cos(a) * sp * (mult || 1), vy: Math.sin(a) * sp * (mult || 1) - 1,
+        s: (4 + Math.random() * 5) * (mult ? 1.4 : 1), life: 1,
+        decay: (0.014 + Math.random() * 0.014) / (mult || 1),
         rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
         c: color
       });
@@ -396,8 +408,11 @@ function hitBricks(b){
           burst(k, pal2(k));
           bricks.splice(i, 1);
           if(k.sup){
+            burst(k, cfg.accent, 4);      // the cube goes out loudly
+            burst(k, '#ffffff', 2);
+            shake = 26;
             score += 2000;
-            state = 'won'; hud();
+            state = 'won'; wonAt = performance.now(); hud();
             if(!reported){
               reported = true;
               onGameOver && onGameOver({ score, level: level + 1, won: true,
@@ -417,25 +432,54 @@ function hitBricks(b){
     }
   }
 
+  /* The objective, drawn as a cube: a front face carrying the logo, plus a lit
+     top and a shaded right side faked in projection. 2D has no camera, so the
+     depth is painted rather than rendered. */
   function drawSuper(k){
-    const img = sprite('brickSuper');
-    if(img){ drawSprite(img, k.x, k.y, k.w, k.h); return; }
+    const wear = 1 - k.hp / (k.maxHp || 1);
     const t = Date.now() / 600;
+    const d = Math.round(k.w * 0.16);            // apparent depth
+    const face = darken(cfg.accent, wear * 0.4);
+    const img = sprite('brickSuper');
+
     ctx.save();
     ctx.shadowColor = cfg.accent;
-    ctx.shadowBlur = 16 + Math.sin(t) * 6;          // a slow pulse: this is the target
-    ctx.fillStyle = darken(cfg.accent, (1 - k.hp / (k.maxHp || 1)) * 0.45);
-    roundRect(k.x, k.y, k.w, k.h, 7); ctx.fill();
+    ctx.shadowBlur = 18 + Math.sin(t) * 7;       // a slow pulse: this is the target
+
+    // top face
+    ctx.fillStyle = darken(cfg.accent, wear * 0.4 + 0.12);
+    ctx.beginPath();
+    ctx.moveTo(k.x, k.y); ctx.lineTo(k.x + d, k.y - d);
+    ctx.lineTo(k.x + k.w + d, k.y - d); ctx.lineTo(k.x + k.w, k.y);
+    ctx.closePath(); ctx.fill();
+    // right face
+    ctx.fillStyle = darken(cfg.accent, wear * 0.4 + 0.34);
+    ctx.beginPath();
+    ctx.moveTo(k.x + k.w, k.y); ctx.lineTo(k.x + k.w + d, k.y - d);
+    ctx.lineTo(k.x + k.w + d, k.y + k.h - d); ctx.lineTo(k.x + k.w, k.y + k.h);
+    ctx.closePath(); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2;
-    roundRect(k.x + 2, k.y + 2, k.w - 4, k.h - 4, 6); ctx.stroke();
-    // remaining hits, as pips across the middle
+
+    // front face - the logo lives here
+    ctx.fillStyle = face;
+    roundRect(k.x, k.y, k.w, k.h, 5); ctx.fill();
+    if(img){
+      const pad = Math.round(k.w * 0.1);
+      ctx.save();
+      roundRect(k.x + 2, k.y + 2, k.w - 4, k.h - 4, 4); ctx.clip();
+      drawSprite(img, k.x + pad, k.y + pad, k.w - pad * 2, k.h - pad * 2);
+      ctx.restore();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2;
+    roundRect(k.x + 1, k.y + 1, k.w - 2, k.h - 2, 5); ctx.stroke();
+
+    // remaining hits, as pips along the bottom edge
     const n = k.maxHp || 1, pr = 4, gapx = 14;
-    const startX = k.x + k.w / 2 - ((n - 1) * gapx) / 2, cy = k.y + k.h / 2;
+    const startX = k.x + k.w / 2 - ((n - 1) * gapx) / 2, cy = k.y + k.h - 12;
     for(let i = 0; i < n; i++){
       ctx.beginPath();
       ctx.arc(startX + i * gapx, cy, pr, 0, Math.PI * 2);
-      ctx.fillStyle = i < k.hp ? 'rgba(255,255,255,.92)' : 'rgba(0,0,0,.35)';
+      ctx.fillStyle = i < k.hp ? 'rgba(255,255,255,.95)' : 'rgba(0,0,0,.45)';
       ctx.fill();
     }
     ctx.restore();
@@ -520,25 +564,31 @@ function hitBricks(b){
     ctx.textAlign = 'center';
     if(state === 'ready'){
       ctx.fillStyle = cfg.accent; ctx.font = '16px system-ui';
-      ctx.fillText('Click or press Space to launch', W / 2, H / 2 + 60);
+      ctx.fillText('Kliknij lub naciśnij spację', W / 2, H / 2 + 60);
     }
     if(state === 'paused'){
       ctx.fillStyle = cfg.accent; ctx.font = 'bold 34px system-ui';
-      ctx.fillText('PAUSED', W / 2, H / 2);
+      ctx.fillText('PAUZA', W / 2, H / 2);
     }
     // When a shell is listening it draws its own game-over UI (score submit,
     // next player), so we only dim the board.
-    if((state === 'over' || state === 'won') && onGameOver){
+    if(state === 'over' && onGameOver){
       ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, W, H);
+    }
+    if(state === 'won' && onGameOver){
+      // let the player watch the cube come apart before anything covers it
+      const since = performance.now() - wonAt;
+      const a = clamp((since - 1100) / 500, 0, 1) * 0.72;
+      if(a > 0){ ctx.fillStyle = 'rgba(0,0,0,' + a + ')'; ctx.fillRect(0, 0, W, H); }
     }
     if(state === 'over' && !onGameOver){
       ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = cfg.accent; ctx.font = 'bold 44px system-ui';
-      ctx.fillText('GAME OVER', W / 2, H / 2 - 16);
+      ctx.fillText('KONIEC GRY', W / 2, H / 2 - 16);
       ctx.fillStyle = cfg.paddleColor; ctx.font = '18px system-ui';
-      ctx.fillText('Score ' + score, W / 2, H / 2 + 20);
+      ctx.fillText('Wynik ' + score, W / 2, H / 2 + 20);
       ctx.globalAlpha = .6; ctx.font = '15px system-ui';
-      ctx.fillText('Click or press Enter to play again', W / 2, H / 2 + 52);
+      ctx.fillText('Kliknij lub Enter, aby zagrać ponownie', W / 2, H / 2 + 52);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -546,7 +596,7 @@ function hitBricks(b){
 
   function loop(){
     if(dead) return;
-    if(state === 'play' || state === 'ready') step();
+    if(state === 'play' || state === 'ready' || state === 'won') step();
     draw();
     raf = requestAnimationFrame(loop);
   }

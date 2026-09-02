@@ -30,6 +30,7 @@ const COLS = 10, ROWS = 8, BW = 56, BH = 22, GAP = 4;
 const OX = (W - (COLS * BW + (COLS - 1) * GAP)) / 2, OY = 70;
 const S = 32;                       // board pixels per world unit
 const BRICK_D = 0.8, BEVEL = 0.08;
+const SUPER = BW * 2 + GAP;   // square footprint: a real cube
 
 const LEVELS = [
   ['..........','.11111111.','.11111111.','.22222222.','..........','..........','..........','..........'],
@@ -41,22 +42,22 @@ const LEVELS = [
 /* Dig mode, identical to the 2D engine: 'S' is the top-left cell of a 2x2
    superblock, walled in at top middle with a hard cap underneath. */
 const DIG_LEVELS = [
-  ['2222222222',
+  ['2222SS2222',
+   '111XSSX111',
+   '111XSSX111',
    '111XSSX111',
    '111XSSX111',
    '1113333111',
    '.11111111.',
-   '..111111..',
-   '..........',
-   '..........'],
-  ['1111111111',
-   '111XSSX111',
+   '..111111..'],
+  ['1111SS1111',
+   '11XXSSXX11',
+   '11XXSSXX11',
+   '11XXSSXX11',
    '111XSSX111',
    '11X3333X11',
    '1111111111',
-   '..222222..',
-   '..........',
-   '..........']
+   '..222222..']
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -101,7 +102,7 @@ function arkanoid3d(canvas, userConfig, opts){
   let cfg = Object.assign({}, DEFAULTS, userConfig || {});
   let bricks = [], balls = [], powerups = [], shards = [], paddle;
   let score, lives, level, state, shake = 0, raf;
-  let timeLeft = null, lastTick = null;
+  let timeLeft = null, lastTick = null, wonAt = 0;
   let dead = false, blocked = false, reported = false;
 
   const hud = () => onHud && onHud({ score, lives, level: level + 1, state,
@@ -173,7 +174,7 @@ function arkanoid3d(canvas, userConfig, opts){
   })();
 
   const brickGeo = beveledBox(BW / S, BH / S, BRICK_D, 0.06);
-  const superGeo = beveledBox((BW * 2 + GAP) / S, (BH * 2 + GAP) / S, BRICK_D * 1.5, 0.1);
+  const superGeo = new THREE.BoxGeometry(SUPER / S, SUPER / S, SUPER / S);
   const shardGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
   const ballGeo = new THREE.SphereGeometry(7 / S, 20, 16);
   const puGeo = beveledBox(22 / S, 22 / S, 0.3, 0.06);
@@ -257,26 +258,29 @@ function arkanoid3d(canvas, userConfig, opts){
     dropMeshes(bricks);
     const set = digMode() ? DIG_LEVELS : LEVELS;
     const layout = set[idx % set.length];
-    const taken = {};
+    // the 'S' cells are a pocket; the cube is one square brick at its top-left
+    let sr = -1, scol = -1;
+    for(let r = 0; r < ROWS; r++) for(let c = 0; c < COLS; c++){
+      if(((layout[r] || '')[c] || '.') === 'S' && sr < 0){ sr = r; scol = c; }
+    }
+    if(sr >= 0){
+      const hp = clamp(+cfg.superHp || 3, 1, 20);
+      const x = OX + scol * (BW + GAP), y = OY + sr * (BH + GAP);
+      const mesh = new THREE.Mesh(superGeo, new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.1 }));
+      mesh.castShadow = true;
+      mesh.position.set(wx(x + SUPER / 2), wy(y + SUPER / 2), SUPER / S / 2 - BRICK_D / 2);
+      board.add(mesh);
+      const k = { x: x, y: y, w: SUPER, h: SUPER, hp: hp, maxHp: hp,
+                  solid: false, sup: true, pi: 0, mesh: mesh };
+      bricks.push(k);
+      styleBrick(k);
+    }
+
     for(let r = 0; r < ROWS; r++) for(let c = 0; c < COLS; c++){
       const ch = (layout[r] || '')[c] || '.';
-      if(ch === '.' || taken[r + ',' + c]) continue;
+      if(ch === '.' || ch === 'S') continue;
       const x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
 
-      if(ch === 'S'){
-        taken[r + ',' + (c + 1)] = taken[(r + 1) + ',' + c] = taken[(r + 1) + ',' + (c + 1)] = 1;
-        const hp = clamp(+cfg.superHp || 3, 1, 20);
-        const w = BW * 2 + GAP, h = BH * 2 + GAP;
-        const mesh = new THREE.Mesh(superGeo, new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.1 }));
-        mesh.castShadow = true;
-        mesh.position.set(wx(x + w / 2), wy(y + h / 2), BRICK_D * 0.25);
-        board.add(mesh);
-        const k = { x: x, y: y, w: w, h: h, hp: hp, maxHp: hp,
-                    solid: false, sup: true, pi: 0, mesh: mesh };
-        bricks.push(k);
-        styleBrick(k);
-        continue;
-      }
 
       const mesh = new THREE.Mesh(brickGeo, new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.05 }));
       mesh.castShadow = true;
@@ -407,15 +411,15 @@ function arkanoid3d(canvas, userConfig, opts){
   }
 
   // ---------------- debris ----------------
-  function burst(k){
+  function burst(k, mult){
     if(!cfg.particles) return;
     const pal = cfg.brickColors.length ? cfg.brickColors : DEFAULTS.brickColors;
-    const col = new THREE.Color(k.solid ? '#5b6684' : pal[k.pi % pal.length]);
+    const col = new THREE.Color(k.sup ? cfg.accent : (k.solid ? '#5b6684' : pal[k.pi % pal.length]));
     // one material per burst, shared by its shards, disposed when they all die
     const mat = new THREE.MeshStandardMaterial({
       color: col, emissive: col.clone().multiplyScalar(0.25),
       roughness: 0.5, metalness: 0.05, transparent: true });
-    const n = 12;
+    const n = Math.round(12 * (mult || 1));
     for(let i = 0; i < n; i++){
       const mesh = new THREE.Mesh(shardGeo, mat);
       const sx = k.x + k.w / 2 + (Math.random() - 0.5) * k.w;
@@ -425,12 +429,12 @@ function arkanoid3d(canvas, userConfig, opts){
       mesh.scale.setScalar(sc);
       board.add(mesh);
       const a = (Math.PI * 2 * i) / n + Math.random() * 0.5;
-      const sp = 0.04 + Math.random() * 0.08;
+      const sp = (0.04 + Math.random() * 0.08) * (mult || 1);
       shards.push({
         mesh: mesh, mat: mat,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp + 0.04, vz: 0.02 + Math.random() * 0.06,
         vrx: (Math.random() - 0.5) * 0.3, vry: (Math.random() - 0.5) * 0.3,
-        life: 1, decay: 0.018 + Math.random() * 0.016, scale: sc
+        life: 1, decay: (0.018 + Math.random() * 0.016) / (mult || 1), scale: sc * (mult ? 1.5 : 1)
       });
     }
   }
@@ -465,6 +469,11 @@ function arkanoid3d(canvas, userConfig, opts){
 
   // ---------------- physics: a straight port of the 2D engine ----------------
   function step(){
+    if(state === 'won'){          // the win animation: debris only
+      stepShards();
+      if(shake > 0) shake--;
+      return;
+    }
     if(timeLeft !== null && state === 'play'){
       const now = performance.now();
       if(lastTick !== null) timeLeft = Math.max(0, timeLeft - (now - lastTick) / 1000);
@@ -563,8 +572,10 @@ function arkanoid3d(canvas, userConfig, opts){
           board.remove(k.mesh); k.mesh.material.dispose();
           bricks.splice(i, 1);
           if(k.sup){
+            burst(k, 4);                  // the cube goes out loudly
+            shake = 26;
             score += 2000;
-            state = 'won'; hud();
+            state = 'won'; wonAt = performance.now(); hud();
             if(!reported){
               reported = true;
               onGameOver && onGameOver({ score: score, level: level + 1, won: true,
@@ -595,6 +606,13 @@ function arkanoid3d(canvas, userConfig, opts){
     }
     if(balls.length) ballLight.position.set(wx(balls[0].x), wy(balls[0].y), 1.4);
 
+    for(const k of bricks){
+      if(!k.sup) continue;
+      const w = Date.now() / 1000;
+      k.mesh.rotation.y = Math.sin(w * 0.6) * 0.22;   // small: the hitbox stays square
+      k.mesh.rotation.x = Math.sin(w * 0.45) * 0.12;
+    }
+
     // the tilt breathes a little so the depth reads, plus a knock on impact
     const t = Date.now() / 1000;
     const jitter = shake ? shake * 0.002 : 0;
@@ -604,7 +622,7 @@ function arkanoid3d(canvas, userConfig, opts){
 
   function loop(){
     if(dead) return;
-    if(state === 'play' || state === 'ready') step();
+    if(state === 'play' || state === 'ready' || state === 'won') step();
     sync();
     renderer.render(scene, camera);
     raf = requestAnimationFrame(loop);

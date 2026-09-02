@@ -45,6 +45,8 @@ MAX_BG_HTML = 20000
 
 # Which parts of a game can carry a custom image.
 SPRITE_SLOTS = ["paddle", "ball", "brick1", "brick2", "brick3", "brickSolid",
+                # the dig-mode cube: one image, drawn on every face
+                "brickSuper",
                 "powerupWide", "powerupMulti", "powerupSlow", "powerupLife",
                 "boardBg",
                 # a transparent PNG laid over the background, behind the board -

@@ -135,6 +135,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 let game = null, player = '', lastScore = null, overlayMode = null;
+const WIN_FX_MS = 1700;   // how long the explosion plays before the score sheet
 
 /* ---------------- background + chrome ---------------- */
 function paintChrome(cfg){
@@ -285,6 +286,8 @@ function gameOver(res){
   } else if(CONFIG.mode !== 'dig'){
     sub += ' — poziom ' + res.level;
   }
+  // On a win, hold the sheet back so the cube's explosion is actually watched.
+  const show = () => {
   openOverlay('over',
     '<h2>' + title + '</h2>' +
     '<p>' + sub + '</p>' +
@@ -306,6 +309,9 @@ function gameOver(res){
     else if(rank > 0) line.textContent = 'Miejsce ' + rank + ' z ' + SCORES.length + '.';
     else line.textContent = 'Zapisano.';
   });
+  };
+
+  if(res.won) setTimeout(show, WIN_FX_MS); else show();
 }
 
 async function postScore(res){
