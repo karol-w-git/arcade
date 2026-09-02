@@ -550,6 +550,18 @@ def api_sprite_delete(iid, slot):
     return jsonify(ok=True)
 
 
+@app.route("/favicon.ico")
+@app.route("/apple-touch-icon.png")
+@app.route("/apple-touch-icon-precomposed.png")
+def favicon():
+    """Browsers ask for these on every page whether or not they exist; without a
+    route each load logs three 404s. Deployed games override it with their own
+    logo, so a client's branding lands in the browser tab."""
+    resp = send_from_directory(BASE / "static", "icon.png")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 @app.route("/uploads/<int:iid>/<path:filename>")
 def uploaded_file(iid, filename):
     folder = UPLOAD_DIR / str(iid)
