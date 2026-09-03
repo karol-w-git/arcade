@@ -27,39 +27,80 @@ const DEFAULTS = {
 };
 
 // board space, identical to the 2D engine
-const W = 640, H = 720;
-const COLS = 10, ROWS = 8, BW = 56, BH = 22, GAP = 4;
+const W = 1280, H = 720;   // 16:9, matching the canvas
+const COLS = 16, ROWS = 10, BW = 72, BH = 30, GAP = 6;
+const BALL_R = 10;            // bigger ball for a bigger board
 const OX = (W - (COLS * BW + (COLS - 1) * GAP)) / 2, OY = 70;
 const S = 32;                       // board pixels per world unit
 const BRICK_D = 0.8, BEVEL = 0.08;
 const SUPER = BW * 2 + GAP;   // square footprint: a real cube
 
 const LEVELS = [
-  ['..........','.11111111.','.11111111.','.22222222.','..........','..........','..........','..........'],
-  ['1........1','.1......1.','..122221..','..123321..','..122221..','.1......1.','1........1','..........'],
-  ['2222222222','2........2','2.X3333X.2','2.3....3.2','2.X3333X.2','2........2','2222222222','..........'],
-  ['.3.3.3.3..','3.3.3.3.3.','.2.2.2.2..','2.2.2.2.2.','.X.1.1.X..','1.1.1.1.1.','.1.1.1.1..','..........']
+  ['................',
+   '.11111111111111.',
+   '.11111111111111.',
+   '.22222222222222.',
+   '.22222222222222.',
+   '................',
+   '................',
+   '................',
+   '................',
+   '................'],
+  ['1..............1',
+   '.11..........11.',
+   '..112222222211..',
+   '..112233332211..',
+   '..112222222211..',
+   '.11..........11.',
+   '1..............1',
+   '................',
+   '................',
+   '................'],
+  ['2222222222222222',
+   '2..............2',
+   '2.XX33333333XX.2',
+   '2.X3........3X.2',
+   '2.XX33333333XX.2',
+   '2..............2',
+   '2222222222222222',
+   '................',
+   '................',
+   '................'],
+  ['.3.3.3.3.3.3.3.3',
+   '3.3.3.3.3.3.3.3.',
+   '.2.2.2.2.2.2.2.2',
+   '2.2.2.2.2.2.2.2.',
+   '.X.1.1.1.1.1.X..',
+   '1.1.1.1.1.1.1.1.',
+   '.1.1.1.1.1.1.1.1',
+   '................',
+   '................',
+   '................']
 ];
 
 /* Dig mode, identical to the 2D engine: 'S' is the top-left cell of a 2x2
    superblock, walled in at top middle with a hard cap underneath. */
 const DIG_LEVELS = [
-  ['2222SS2222',
-   '111XSSX111',
-   '111XSSX111',
-   '111XSSX111',
-   '111XSSX111',
-   '1113333111',
-   '.11111111.',
-   '..111111..'],
-  ['1111SS1111',
-   '11XXSSXX11',
-   '11XXSSXX11',
-   '11XXSSXX11',
-   '111XSSX111',
-   '11X3333X11',
-   '1111111111',
-   '..222222..']
+  ['2222222SS2222222',
+   '111111XSSX111111',
+   '111111XSSX111111',
+   '111111XSSX111111',
+   '111111XSSX111111',
+   '1111113333111111',
+   '.11111111111111.',
+   '..111111111111..',
+   '....11111111....',
+   '................'],
+  ['1111111SS1111111',
+   '11111XXSSXX11111',
+   '11111XXSSXX11111',
+   '11111XXSSXX11111',
+   '111111XSSX111111',
+   '11111X3333X11111',
+   '1111111111111111',
+   '..222222222222..',
+   '....11111111....',
+   '................']
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -133,7 +174,7 @@ function arkanoid3d(canvas, userConfig, opts){
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   const sc = key.shadow.camera;             // orthographic: cover the whole board
-  sc.left = -14; sc.right = 14; sc.top = 16; sc.bottom = -16; sc.near = 1; sc.far = 60;
+  sc.left = -24; sc.right = 24; sc.top = 16; sc.bottom = -16; sc.near = 1; sc.far = 60;
   scene.add(key);
   const rim = new THREE.DirectionalLight(0xffffff, 0.5);
   rim.position.set(11, -7, 5);
@@ -180,8 +221,8 @@ function arkanoid3d(canvas, userConfig, opts){
   const dotGeo = new THREE.CircleGeometry(1, 16);   // hit dots
   const superGeo = new THREE.BoxGeometry(SUPER / S, SUPER / S, SUPER / S);
   const shardGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
-  const ballGeo = new THREE.SphereGeometry(7 / S, 20, 16);
-  const puGeo = beveledBox(22 / S, 22 / S, 0.3, 0.06);
+  const ballGeo = new THREE.SphereGeometry(BALL_R / S, 20, 16);
+  const puGeo = beveledBox(28 / S, 28 / S, 0.3, 0.06);
   let paddleGeo = null;
 
   const paddleMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.05 });
@@ -376,11 +417,13 @@ function arkanoid3d(canvas, userConfig, opts){
     }
   }
 
-  const baseW = () => clamp(+cfg.paddleWidth || 110, 50, 260);
+  // paddleWidth is authored against the old 640-wide board; scale it so a
+  // stored value keeps the same share of the field
+  const baseW = () => clamp(+cfg.paddleWidth || 110, 50, 260) * (W / 640);
 
   function resetPaddle(){
     const w = baseW();
-    paddle = { x: W / 2 - w / 2, y: H - 46, w: w, h: 14, speed: 9, wide: 0 };
+    paddle = { x: W / 2 - w / 2, y: H - 46, w: w, h: 18, speed: 11, wide: 0 };
     rebuildPaddleGeo();
   }
 
@@ -388,7 +431,7 @@ function arkanoid3d(canvas, userConfig, opts){
     const mesh = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.1 }));
     mesh.castShadow = true;
     board.add(mesh);
-    const b = { x: paddle.x + paddle.w / 2, y: paddle.y - 8, r: 7, vx: 0, vy: 0, stuck: !!stuck, mesh: mesh };
+    const b = { x: paddle.x + paddle.w / 2, y: paddle.y - 12, r: BALL_R, vx: 0, vy: 0, stuck: !!stuck, mesh: mesh };
     styleBall(b);
     return b;
   }
@@ -476,10 +519,10 @@ function arkanoid3d(canvas, userConfig, opts){
       color: t ? 0xffffff : p.c, emissive: new THREE.Color(p.c).multiplyScalar(0.35), map: t || null }));
     mesh.castShadow = true;
     board.add(mesh);
-    powerups.push({ x: x, y: y, w: 22, h: 22, vy: 2.4, k: p.k, mesh: mesh, spin: 0 });
+    powerups.push({ x: x, y: y, w: 28, h: 28, vy: 2.6, k: p.k, mesh: mesh, spin: 0 });
   }
   function applyPower(k){
-    if(k === 'wide'){ paddle.wide = 900; paddle.w = 170; rebuildPaddleGeo(); }
+    if(k === 'wide'){ paddle.wide = 900; paddle.w = baseW() * 1.55; rebuildPaddleGeo(); }
     else if(k === 'multi'){
       for(const b of balls.slice(0, 3)) for(const s of [-0.45, 0.45]){
         const sp = Math.hypot(b.vx, b.vy) || 7.2;
@@ -554,7 +597,6 @@ function arkanoid3d(canvas, userConfig, opts){
   function step(){
     if(state === 'won'){          // the win animation: debris only
       stepShards();
-      if(shake > 0) shake--;
       return;
     }
     if(timeLeft !== null && state === 'play'){
@@ -635,7 +677,6 @@ function arkanoid3d(canvas, userConfig, opts){
       startLevel(level + 1);
     }
     stepShards();
-    if(shake > 0) shake--;
   }
 
   function hitBricks(b){
@@ -673,7 +714,7 @@ function arkanoid3d(canvas, userConfig, opts){
             }
             return;
           }
-          maybeDrop(k.x + k.w / 2 - 11, k.y);
+          maybeDrop(k.x + k.w / 2 - 14, k.y);
           score += 100;
         } else {
           styleBrick(k);
@@ -718,6 +759,9 @@ function arkanoid3d(canvas, userConfig, opts){
   function loop(){
     if(dead) return;
     if(state === 'play' || state === 'ready' || state === 'won') step();
+    // decay here, not in step(): 'over' never steps, and a shake left at full
+    // strength shook the board until somebody started a new game
+    if(shake > 0) shake--;
     sync();
     renderer.render(scene, camera);
     raf = requestAnimationFrame(loop);

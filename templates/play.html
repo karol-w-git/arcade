@@ -25,43 +25,50 @@
   #hud{display:flex;gap:26px;font-variant-numeric:tabular-nums;letter-spacing:.05em;font-size:14px}
   #hud b{font-weight:600}
   #who{font-size:13px;opacity:.55;min-height:16px}
-  /* the board is the point: fill the height, keep its 8:9 shape */
-  canvas{height:min(86vh, calc(96vw * 9 / 8));width:auto;max-width:96vw;touch-action:none;display:block}
+  /* 16:9 board, filling whichever axis runs out first - the screen at an event
+     is nearly always 16:9, so this leaves almost no margin */
+  canvas{width:min(98vw, calc(88vh * 16 / 9));height:auto;touch-action:none;display:block}
   /* the frame is chrome only - without it the board bleeds into the background */
   canvas.framed{border-radius:10px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 18px 60px -20px #000}
   #help{font-size:12.5px;opacity:.45;text-align:center}
 
   /* ---- overlays ---- */
+  /* The sheets take their colours from the instance: --sheet-bg is the board
+     colour, --sheet-line the accent at low alpha, text the page text colour. */
   #overlay{
     position:fixed;inset:0;z-index:5;display:none;align-items:center;justify-content:center;
-    background:rgba(4,6,12,.72);backdrop-filter:blur(3px);padding:20px;
+    background:var(--scrim,rgba(4,6,12,.72));backdrop-filter:blur(3px);padding:20px;
   }
   #overlay.on{display:flex}
   .sheet{
-    width:100%;max-width:400px;background:#111629;border:1px solid #232c47;
+    width:100%;max-width:400px;background:var(--sheet-bg,#111629);
+    border:1px solid var(--sheet-line,#232c47);color:var(--text,#e8ecf8);
     border-radius:12px;padding:22px;box-shadow:0 30px 80px -30px #000;
   }
-  .sheet h2{margin:0 0 4px;font-size:19px}
-  .sheet p{margin:0 0 16px;font-size:13.5px;opacity:.6}
+  .sheet h2{margin:0 0 4px;font-size:19px;color:var(--accent-text,#e8ecf8)}
+  .sheet p{margin:0 0 16px;font-size:13.5px;opacity:.65}
   .sheet input[type=text]{
-    width:100%;background:#0a0e1c;border:1px solid #232c47;color:#e8ecf8;
+    width:100%;background:var(--sheet-input,#0a0e1c);border:1px solid var(--sheet-line,#232c47);
+    color:var(--text,#e8ecf8);
     padding:10px 12px;border-radius:8px;font:inherit;box-sizing:border-box;
   }
   .sheet input:focus{outline:none;border-color:var(--accent,#4cc9f0)}
   .btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
   .b{
-    flex:1;min-width:120px;background:#161d33;border:1px solid #232c47;color:#e8ecf8;
+    flex:1;min-width:120px;background:var(--sheet-input,#161d33);
+    border:1px solid var(--sheet-line,#232c47);color:var(--text,#e8ecf8);
     padding:10px 14px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer;
   }
-  .b:hover{border-color:#3b4a76}
-  .b.primary{background:var(--accent,#4cc9f0);border-color:var(--accent,#4cc9f0);color:#04121a;font-weight:600}
+  .b:hover{border-color:var(--accent,#3b4a76)}
+  .b.primary{background:var(--accent,#4cc9f0);border-color:var(--accent,#4cc9f0);
+             color:var(--sheet-bg,#04121a);font-weight:600}
   .big{font-size:34px;font-weight:700;margin:6px 0 2px;color:var(--accent-text,#4cc9f0);
        font-variant-numeric:tabular-nums}
 
   /* ---- leaderboard ---- */
   ol.board{list-style:none;margin:0 0 4px;padding:0;max-height:46vh;overflow-y:auto}
   ol.board li{display:flex;align-items:baseline;gap:10px;padding:7px 2px;
-              border-bottom:1px solid #1b2338;font-size:14px}
+              border-bottom:1px solid var(--sheet-line,#1b2338);font-size:14px}
   ol.board li:last-child{border-bottom:0}
   ol.board .rank{width:24px;opacity:.45;font-size:12.5px;text-align:right}
   ol.board .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -116,7 +123,7 @@
   <span id="timeBox" hidden>CZAS <b id="time">--</b></span>
 </div>
 <div id="who"></div>
-<canvas id="c" width="640" height="720"></canvas>
+<canvas id="c" width="1280" height="720"></canvas>
 <div id="help">Ruch: mysz / strzałki &middot; Start: klik lub spacja &middot; Pauza: Esc &middot; <b>Wyniki: P</b></div>
 
 <div id="overlay"><div class="sheet" id="sheet"></div></div>
@@ -133,6 +140,20 @@ let SCORES = {{ scores|tojson }};
 const ENGINE = {{ meta.engine.split('/')[-1].replace('.js','')|tojson }};
 const $ = id => document.getElementById(id);
 const makeGame = () => Arcade[ENGINE]($('c'), CONFIG, { onHud: hud, onGameOver: gameOver });
+const hex2rgb = h => {
+  const n = parseInt(String(h || '#000000').slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const mixHex = (a, b, t) => {
+  const A = hex2rgb(a), B = hex2rgb(b);
+  const c = A.map((v, i) => Math.round(v + (B[i] - v) * t));
+  return 'rgb(' + c.join(',') + ')';
+};
+const rgba = (h, a) => {
+  const c = String(h).startsWith('#') ? hex2rgb(h) : String(h).match(/\d+/g).map(Number);
+  return 'rgba(' + c.slice(0, 3).join(',') + ',' + a + ')';
+};
+
 const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -147,6 +168,13 @@ function paintChrome(cfg){
   document.body.style.color = cfg.textColor || cfg.paddleColor;
   document.body.style.setProperty('--accent', cfg.accent);
   document.body.style.setProperty('--accent-text', cfg.accentTextColor || cfg.accent);
+  document.body.style.setProperty('--text', cfg.textColor || cfg.paddleColor);
+  // sheets sit on the board colour, lifted slightly so they read against the page
+  const S = document.body.style;
+  S.setProperty('--sheet-bg', mixHex(cfg.bg, cfg.pageBg, 0.5));
+  S.setProperty('--sheet-input', mixHex(cfg.bg, '#000000', 0.25));
+  S.setProperty('--sheet-line', rgba(cfg.accent, 0.35));
+  S.setProperty('--scrim', rgba(mixHex(cfg.bg, '#000000', 0.5), 0.72));
   $('c').classList.toggle('framed', cfg.frame !== false);
   paintOverlay(cfg);
   const at = cfg.accentTextColor || cfg.accent;
@@ -299,11 +327,9 @@ function gameOver(res){
     '<div class="big">' + res.score + '</div>' +
     '<div id="rankLine" class="none">Zapisywanie…</div>' +
     '<div class="btns">' +
-      '<button class="b primary" id="againBtn">Zagraj ponownie</button>' +
-      '<button class="b" id="nextBtn">Następny gracz</button>' +
+      '<button class="b primary" id="nextBtn">Następny gracz</button>' +
       '<button class="b" id="boardBtn2">Wyniki (P)</button>' +
     '</div>');
-  $('againBtn').onclick = () => { closeOverlay(); game.restart(CONFIG); };
   $('nextBtn').onclick  = () => { player = ''; askName(); };
   $('boardBtn2').onclick = () => showBoard();
 

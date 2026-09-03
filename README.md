@@ -63,6 +63,16 @@ copy of your instances and scores.
 6. The instance is live at `/g/<slug>`. Visitors hit a password gate first; unlocking
    stores a per-slug flag in their session.
 
+## Board shape
+
+The field is **1280x720** in board coordinates - 16:9, because that is what an
+event screen is - laid out as 16 columns by 10 rows. The canvas scales to fill
+whichever axis runs out first (`min(98vw, 88vh * 16/9)`), so it fills a 1080p
+screen to within a few percent and still fits a laptop.
+
+`paddleWidth` is stored against the original 640-wide field and scaled on the way
+in, so an instance tuned before the change keeps the same share of the board.
+
 ## Backgrounds
 
 Three modes, per instance:

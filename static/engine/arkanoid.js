@@ -36,36 +36,77 @@ const DEFAULTS = {
   sprites: {}
 };
 
-const COLS = 10, ROWS = 8, BW = 56, BH = 22, GAP = 4;
+const COLS = 16, ROWS = 10, BW = 72, BH = 30, GAP = 6;
+const BALL_R = 10;            // bigger ball for a bigger board
 const SUPER = BW * 2 + GAP;   // the superblock is square: a cube, not a slab
 
 const LEVELS = [
-  ['..........','.11111111.','.11111111.','.22222222.','..........','..........','..........','..........'],
-  ['1........1','.1......1.','..122221..','..123321..','..122221..','.1......1.','1........1','..........'],
-  ['2222222222','2........2','2.X3333X.2','2.3....3.2','2.X3333X.2','2........2','2222222222','..........'],
-  ['.3.3.3.3..','3.3.3.3.3.','.2.2.2.2..','2.2.2.2.2.','.X.1.1.X..','1.1.1.1.1.','.1.1.1.1..','..........']
+  ['................',
+   '.11111111111111.',
+   '.11111111111111.',
+   '.22222222222222.',
+   '.22222222222222.',
+   '................',
+   '................',
+   '................',
+   '................',
+   '................'],
+  ['1..............1',
+   '.11..........11.',
+   '..112222222211..',
+   '..112233332211..',
+   '..112222222211..',
+   '.11..........11.',
+   '1..............1',
+   '................',
+   '................',
+   '................'],
+  ['2222222222222222',
+   '2..............2',
+   '2.XX33333333XX.2',
+   '2.X3........3X.2',
+   '2.XX33333333XX.2',
+   '2..............2',
+   '2222222222222222',
+   '................',
+   '................',
+   '................'],
+  ['.3.3.3.3.3.3.3.3',
+   '3.3.3.3.3.3.3.3.',
+   '.2.2.2.2.2.2.2.2',
+   '2.2.2.2.2.2.2.2.',
+   '.X.1.1.1.1.1.X..',
+   '1.1.1.1.1.1.1.1.',
+   '.1.1.1.1.1.1.1.1',
+   '................',
+   '................',
+   '................']
 ];
 
 /* Dig mode. 'S' marks the top-left cell of a 2x2 superblock; 'X' is unbreakable.
    The superblock sits top-middle, flanked by walls, with a hard cap underneath -
    the only way in is straight up through the middle. */
 const DIG_LEVELS = [
-  ['2222SS2222',
-   '111XSSX111',
-   '111XSSX111',
-   '111XSSX111',
-   '111XSSX111',
-   '1113333111',
-   '.11111111.',
-   '..111111..'],
-  ['1111SS1111',
-   '11XXSSXX11',
-   '11XXSSXX11',
-   '11XXSSXX11',
-   '111XSSX111',
-   '11X3333X11',
-   '1111111111',
-   '..222222..']
+  ['2222222SS2222222',
+   '111111XSSX111111',
+   '111111XSSX111111',
+   '111111XSSX111111',
+   '111111XSSX111111',
+   '1111113333111111',
+   '.11111111111111.',
+   '..111111111111..',
+   '....11111111....',
+   '................'],
+  ['1111111SS1111111',
+   '11111XXSSXX11111',
+   '11111XXSSXX11111',
+   '11111XXSSXX11111',
+   '111111XSSX111111',
+   '11111X3333X11111',
+   '1111111111111111',
+   '..222222222222..',
+   '....11111111....',
+   '................']
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -166,14 +207,16 @@ function arkanoid(cv, userConfig, opts){
     return out;
   }
 
-  const baseW = () => clamp(+cfg.paddleWidth || 110, 50, 260);
+  // paddleWidth is authored against the old 640-wide board; scale it so a
+  // stored value keeps the same share of the field
+  const baseW = () => clamp(+cfg.paddleWidth || 110, 50, 260) * (W / 640);
 
   function resetPaddle(){
     const w = baseW();
-    paddle = { x: W / 2 - w / 2, y: H - 46, w: w, h: 14, speed: 9, wide: 0 };
+    paddle = { x: W / 2 - w / 2, y: H - 46, w: w, h: 18, speed: 11, wide: 0 };
   }
 
-  const newBall = stuck => ({ x: paddle.x + paddle.w / 2, y: paddle.y - 8, r: 7, vx: 0, vy: 0, stuck: !!stuck });
+  const newBall = stuck => ({ x: paddle.x + paddle.w / 2, y: paddle.y - 12, r: BALL_R, vx: 0, vy: 0, stuck: !!stuck });
 
   function startLevel(i){
     level = i;
@@ -256,7 +299,7 @@ function arkanoid(cv, userConfig, opts){
   function maybeDrop(x, y){
     if(!cfg.powerups || Math.random() > 0.14) return;
     const p = PTYPES[Math.random() * PTYPES.length | 0];
-    powerups.push({ x: x, y: y, w: 22, h: 22, vy: 2.4, k: p.k, c: p.c, t: p.t });
+    powerups.push({ x: x, y: y, w: 28, h: 28, vy: 2.6, k: p.k, c: p.c, t: p.t });
   }
   function applyPower(k){
     if(k === 'wide'){ paddle.wide = 900; paddle.w = baseW() * 1.55; }
@@ -275,7 +318,6 @@ function arkanoid(cv, userConfig, opts){
   function step(){
     if(state === 'won'){          // the win animation: debris only
       stepShards();
-      if(shake > 0) shake--;
       return;
     }
     if(timeLeft !== null && state === 'play'){
@@ -349,7 +391,6 @@ function arkanoid(cv, userConfig, opts){
       startLevel(level + 1);
     }
     stepShards();
-    if(shake > 0) shake--;
   }
 
     // colour a brick resolves to right now - shared by the renderer and the debris
@@ -435,7 +476,7 @@ function hitBricks(b){
             }
             return;
           }
-          maybeDrop(k.x + k.w / 2 - 11, k.y);
+          maybeDrop(k.x + k.w / 2 - 14, k.y);
           score += 100;
         } else {
           score += 25;
@@ -656,6 +697,9 @@ function hitBricks(b){
   function loop(){
     if(dead) return;
     if(state === 'play' || state === 'ready' || state === 'won') step();
+    // decay here, not in step(): 'over' never steps, and a shake left at full
+    // strength shook the board until somebody started a new game
+    if(shake > 0) shake--;
     draw();
     raf = requestAnimationFrame(loop);
   }
