@@ -175,12 +175,19 @@ function helix(canvas, userConfig, opts){
   const spikeGeo = new THREE.ConeGeometry(0.16, 0.42, 5);
   const spikeMat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.15 });
   function addSpikes(mesh, sweep){
-    const rMid = (R_IN + R_OUT) / 2;
-    for(let i = 1; i <= 3; i++){
-      const a = sweep * (i / 4);                  // spread across the wedge
-      const sp = new THREE.Mesh(spikeGeo, spikeMat);
-      sp.position.set(Math.sin(a) * rMid, PLATE_H / 2 + 0.21, Math.cos(a) * rMid);
-      mesh.add(sp);                               // inherits the parent's visibility
+    // two staggered rows across the wedge, so the danger reads from any angle
+    const span = R_OUT - R_IN;
+    const rows = [
+      { r: R_IN + span * 0.34, n: 3, offset: 0.5 },
+      { r: R_IN + span * 0.72, n: 4, offset: 0.0 }
+    ];
+    for(const row of rows){
+      for(let i = 0; i < row.n; i++){
+        const a = sweep * ((i + 1 + row.offset) / (row.n + 1 + row.offset * 2));
+        const sp = new THREE.Mesh(spikeGeo, spikeMat);
+        sp.position.set(Math.sin(a) * row.r, PLATE_H / 2 + 0.21, Math.cos(a) * row.r);
+        mesh.add(sp);                             // inherits the parent's visibility
+      }
     }
   }
 
