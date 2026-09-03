@@ -63,6 +63,29 @@ copy of your instances and scores.
 6. The instance is live at `/g/<slug>`. Visitors hit a password gate first; unlocking
    stores a per-slug flag in their session.
 
+## Game types
+
+Three, all sharing one engine contract and one editor:
+
+| Type | | |
+| --- | --- | --- |
+| **Arkanoid** | 2D | brick breaker, 16:9 board |
+| **Arkanoid 3D** | 3D | the same physics on a tilted board with bevelled bricks |
+| **Helix Jump** | 3D | spin a tower, drop a ball through the gaps to the logo pad |
+
+### Helix Jump
+
+The ball falls; the player spins the tower (drag, arrow keys or a finger) to line
+a gap up beneath it. Landing on a platform bounces; finding the gap drops a level
+and scores. Chain `helixSmash` clean drops and the ball becomes a wrecking ball
+that smashes platforms instead of bouncing - red hazard wedges stay fatal either
+way, and cost a life. Reaching the pad at the bottom wins, and that pad carries
+the **goalPad** sprite, so the event logo is the thing you land on.
+
+Its own **Tower** panel sets depth, wedges per ring, gap width, hazard share,
+spin sensitivity and drops-to-smash, plus the hazard and pad colours. `mode: dig`
+puts it on the clock exactly like the brick games.
+
 ## Board shape
 
 The field is **1280x720** in board coordinates - 16:9, because that is what an
@@ -207,6 +230,10 @@ the file to reset.
 1. Drop an engine at `static/engine/<name>.js` that registers
    `Arcade.<name>(canvas, config, { onHud, onGameOver })` and returns
    `{ setConfig, restart, pause, resume, setBlocked, getState, destroy }`.
+   Declare any libraries it needs in `libs` and they are loaded before it.
+   A game type only has to declare the config keys it uses: `clean_config()`
+   clamps whatever is present and ignores the rest, so Helix Jump carries no
+   paddle settings and the brick games carry no tower settings.
    The page shell owns the name prompt, the `P` leaderboard and score submission, so a new
    engine gets all of that for free by calling `onGameOver({ score, level })` once per death.
 2. Add an entry to `GAME_TYPES` in `app.py` with its `defaults` dict.

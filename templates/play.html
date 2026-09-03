@@ -245,7 +245,9 @@ const hud = s => {
   $('level').textContent = s.level;
   const dig = s.mode === 'dig';
   $('timeBox').hidden = !dig;
-  $('levelBox').hidden = dig;            // in dig mode a level number means nothing
+  // in dig mode a brick game's level number means nothing, but Helix Jump's
+  // depth does - the engine says which it is
+  $('levelBox').hidden = dig && !s.showLevel;
   if(dig && s.timeLeft !== null && s.timeLeft !== undefined){
     $('time').textContent = fmtTime(s.timeLeft);
     $('time').style.color = s.timeLeft <= 10 ? '#ff5d73'

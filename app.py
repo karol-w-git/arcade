@@ -47,6 +47,8 @@ MAX_BG_HTML = 20000
 SPRITE_SLOTS = ["paddle", "ball", "brick1", "brick2", "brick3", "brickSolid",
                 # the dig-mode cube: one image, drawn on every face
                 "brickSuper",
+                # helix jump: the logo on the pad at the bottom of the tower
+                "goalPad",
                 "powerupWide", "powerupMulti", "powerupSlow", "powerupLife",
                 "boardBg",
                 # a transparent PNG laid over the background, behind the board -
@@ -116,6 +118,56 @@ GAME_TYPES = {
             "sprites": {},
         },
     }
+}
+
+# Helix Jump keeps the shared look-and-feel keys and adds its own tower settings.
+GAME_TYPES["helix"] = {
+    "name": "Helix Jump",
+    "blurb": "Spin the tower to drop a ball through the gaps, dodge the red "
+             "wedges, and land on the logo pad at the bottom.",
+    "engine": "engine/helix.js",
+    "libs": ["vendor/three.min.js"],
+    "dimensions": "3D",
+    "defaults": {
+        "bg": "#05070f",
+        "pageBg": "#0a0c14",
+        "accent": "#4cc9f0",
+        "paddleColor": "#e8ecf8",
+        "ballColor": "#e8ecf8",
+        "brickColors": ["#f72585", "#b5179e", "#7209b7", "#4361ee",
+                        "#4cc9f0", "#3ddc97", "#ffd166", "#ff8c42"],
+        "textColor": "",
+        "accentTextColor": "",
+        "lives": 3,
+        "particles": True,
+        "boardAlpha": 1.0,
+        "frame": True,
+        "bgStyle": "radial",
+        "bgMode": "color",
+        "bgPreset": "starfield",
+        "bgHtml": "",
+        "overlayPos": "center",
+        "overlaySize": 40,
+        "overlayOpacity": 0.5,
+        "overlayTile": False,
+        "overlayFront": False,
+        "askName": True,
+        "scoreboard": True,
+        "sprites": {},
+        "damageDarken": 0.32,
+        # objective: 'dig' puts it on the clock, same as the brick games
+        "mode": "classic",
+        "timeLimit": 90,
+        # the tower
+        "helixLevels": 24,      # how deep it goes
+        "helixSlots": 8,        # wedges per ring
+        "helixGap": 2,          # wedges removed to make the way through
+        "helixHazard": 0.22,    # share of the rest that are deadly
+        "helixSpin": 1.0,       # rotation sensitivity
+        "helixSmash": 3,        # clean drops before the ball smashes through
+        "hazardColor": "#e63946",
+        "goalColor": "",        # "" follows the accent
+    },
 }
 
 # The 3D game reads the same config keys, so the editor needs no per-type branching.
@@ -310,7 +362,7 @@ def clean_config(game_type: str, raw: dict) -> dict:
                 cols = [c for c in v if isinstance(c, str) and hexcol.match(c)][:12]
                 out[key] = cols or dv
             elif isinstance(dv, str):
-                if key in ("superColor", "textColor", "accentTextColor"):
+                if key in ("superColor", "textColor", "accentTextColor", "goalColor"):
                     v = v if isinstance(v, str) else ""
                     out[key] = v if (v == "" or hexcol.match(v)) else ""
                 elif key.endswith("Color") or key in ("bg", "accent", "pageBg"):
@@ -320,32 +372,50 @@ def clean_config(game_type: str, raw: dict) -> dict:
         except (TypeError, ValueError):
             out[key] = dv
 
-    out["lives"] = max(1, min(9, int(out["lives"])))
-    out["ballSpeed"] = max(3.0, min(14.0, float(out["ballSpeed"])))
-    out["paddleWidth"] = max(50, min(260, int(out["paddleWidth"])))
-    out["level"] = max(0, min(3, int(out["level"])))
-    out["timeLimit"] = max(15, min(600, int(out["timeLimit"])))
-    out["superHp"] = max(1, min(20, int(out["superHp"])))
-    out["pipSize"] = max(1, min(14, int(out["pipSize"])))
-    out["logoScale"] = max(30, min(100, int(out["logoScale"])))
-    out["damageDarken"] = max(0.0, min(0.8, float(out["damageDarken"])))
-    if out.get("mode") not in ("classic", "dig"):
+    # Ranges, applied only to the keys this game type actually declares - a type
+    # is free to omit any of them (Helix Jump has no paddle, for instance).
+    def clamp_int(key, lo, hi):
+        if key in out:
+            out[key] = max(lo, min(hi, int(out[key])))
+
+    def clamp_float(key, lo, hi):
+        if key in out:
+            out[key] = max(lo, min(hi, float(out[key])))
+
+    clamp_int("lives", 1, 9)
+    clamp_float("ballSpeed", 3.0, 14.0)
+    clamp_int("paddleWidth", 50, 260)
+    clamp_int("level", 0, 3)
+    clamp_int("timeLimit", 15, 600)
+    clamp_int("superHp", 1, 20)
+    clamp_int("pipSize", 1, 14)
+    clamp_int("logoScale", 30, 100)
+    clamp_float("damageDarken", 0.0, 0.8)
+    clamp_int("helixLevels", 5, 80)
+    clamp_int("helixSlots", 4, 16)
+    clamp_float("helixHazard", 0.0, 0.6)
+    clamp_float("helixSpin", 0.2, 3.0)
+    clamp_int("helixSmash", 1, 20)
+    if "helixGap" in out:               # never wide enough to swallow the ring
+        out["helixGap"] = max(1, min(max(1, out["helixSlots"] - 2), int(out["helixGap"])))
+    if "mode" in out and out["mode"] not in ("classic", "dig"):
         out["mode"] = "classic"
-    out["boardAlpha"] = max(0.0, min(1.0, float(out["boardAlpha"])))
+    clamp_float("boardAlpha", 0.0, 1.0)
     for k in ("tiltX", "tiltY"):        # 3D only; radians, kept to a gentle lean
         if k in out:
             out[k] = max(-0.6, min(0.6, float(out[k])))
-    if out.get("bgStyle") not in ("radial", "flat"):
+    if "bgStyle" in out and out["bgStyle"] not in ("radial", "flat"):
         out["bgStyle"] = "radial"
     if out.get("bgMode") not in ("color", "preset", "custom"):
         out["bgMode"] = "color"
-    if out.get("bgPreset") not in ("starfield", "aurora", "scanlines", "drift"):
+    if "bgPreset" in out and out["bgPreset"] not in ("starfield", "aurora", "scanlines", "drift"):
         out["bgPreset"] = "starfield"
-    if out.get("overlayPos") not in ("center", "top", "bottom", "top-left",
-                                     "top-right", "bottom-left", "bottom-right"):
+    if "overlayPos" in out and out["overlayPos"] not in (
+            "center", "top", "bottom", "top-left", "top-right",
+            "bottom-left", "bottom-right"):
         out["overlayPos"] = "center"
-    out["overlaySize"] = max(5, min(100, int(out["overlaySize"])))
-    out["overlayOpacity"] = max(0.0, min(1.0, float(out["overlayOpacity"])))
+    clamp_int("overlaySize", 5, 100)
+    clamp_float("overlayOpacity", 0.0, 1.0)
     return out
 
 
