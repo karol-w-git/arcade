@@ -461,6 +461,9 @@ function arkanoid3d(canvas, userConfig, opts){
   const keys = {};
   function onKeyDown(e){
     if(blocked) return;
+    // a keystroke aimed at a text field is not a game control
+    const t = e.target;
+    if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     keys[e.code] = true;
     if(e.code === 'Space'){ e.preventDefault(); launch(); }
     if(e.code === 'Escape'){

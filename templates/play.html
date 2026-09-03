@@ -371,8 +371,16 @@ function begin(name){
   game.setBlocked(false);
 }
 
+/* A key pressed inside a text field belongs to the field. Without this, typing
+   a name with P in it opened the leaderboard instead of typing the letter. */
+function isTyping(e){
+  const t = e.target;
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+}
+
 /* P toggles the board from anywhere; Esc closes it too. */
 addEventListener('keydown', e => {
+  if(isTyping(e)) return;
   if(e.code === 'KeyP'){
     e.preventDefault();
     if(overlayMode === 'board') backFromBoard();
