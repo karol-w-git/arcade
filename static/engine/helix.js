@@ -38,7 +38,10 @@ const DEFAULTS = {
 // tower geometry, in world units
 const R_IN = 0.55, R_OUT = 3.4, PLATE_H = 0.42;
 const LEVEL_H = 2.6, BALL_R = 0.52;
-const GRAVITY = -0.022, BOUNCE = 0.58, MAX_FALL = -0.62;
+// A bounce must stay well under one level. apex = BOUNCE^2 / (2 * |GRAVITY|),
+// so 0.22 gives ~1.1 units against a 2.6-unit spacing. It used to be 0.58, an
+// apex of 7.6 units: the ball climbed the tower instead of descending it.
+const GRAVITY = -0.022, BOUNCE = 0.22, MAX_FALL = -0.45;
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const TAU = Math.PI * 2;
@@ -184,7 +187,12 @@ function helix(canvas, userConfig, opts){
         const mesh = new THREE.Mesh(wedgeGeo(slotAngle * 0.985),
           new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.08 }));
         mesh.position.y = y;
-        mesh.rotation.y = -start;      // three's theta runs the other way
+        // CylinderGeometry's theta starts at +Z and runs toward +X, which is the
+        // same direction atan2(x, z) measures - so the mesh rotates by +start,
+        // matching the [start, start+sweep] range the collision test uses.
+        // With -start the tower rendered mirrored: the visible gap was never the
+        // real one, and the game was unplayable.
+        mesh.rotation.y = start;
         tower.add(mesh);
         wedges.push({ mesh: mesh, start: start, sweep: slotAngle * 0.985, hazard: hazard });
       }
@@ -342,12 +350,15 @@ function helix(canvas, userConfig, opts){
   }
 
   // ---------------- physics ----------------
-  function ringAt(y){
-    // the ring whose top face the ball is about to cross
+  /* The ring whose top face the ball crosses between this frame and the next.
+     A window test ("is the ball within 0.8 of the top?") silently misses at
+     speed; a swept test cannot. */
+  function ringCrossed(fromY, toY){
+    const fromBottom = fromY - BALL_R, toBottom = toY - BALL_R;
     for(const r of rings){
       if(r.broken || !r.wedges.length) continue;
       const top = r.y + PLATE_H / 2;
-      if(y - BALL_R <= top && y - BALL_R > top - 0.8) return r;
+      if(fromBottom > top && toBottom <= top) return r;
     }
     return null;
   }
@@ -411,39 +422,37 @@ function helix(canvas, userConfig, opts){
     const nextY = ball.y + ball.vy;
 
     if(ball.vy < 0){
-      const ring = ringAt(nextY);
+      const ring = ringCrossed(ball.y, nextY);
       if(ring){
         const w = wedgeUnderBall(ring);
-        if(w){
-          if(w.hazard){                       // red is fatal, smashing or not
-            lose('hazard');
-            return;
-          }
-          if(smashing){
-            smashRing(ring);
-            score += 50; hud();
-            depth = Math.max(depth, ring.level + 1);
-          } else {
-            ball.y = ring.y + PLATE_H / 2 + BALL_R;
-            ball.vy = BOUNCE;
-            combo = 0;
-            shake = Math.max(shake, 3);
-            hud();
-            return;
-          }
-        } else {
-          // through the gap
-          if(ring.level + 1 > depth){
-            depth = ring.level + 1;
-            score += 100;
-            combo++;
-            if(combo >= clamp(+cfg.helixSmash || 3, 1, 20)) smashing = true;
-            hud();
-          }
+        if(w && w.hazard){                    // red is fatal, smashing or not
+          lose('hazard');
+          return;
         }
+        if(w && !smashing){                   // land on it and hop
+          ball.y = ring.y + PLATE_H / 2 + BALL_R;
+          ball.vy = BOUNCE;
+          combo = 0;
+          smashing = false;
+          shake = Math.max(shake, 3);
+          hud();
+          return;
+        }
+        if(w && smashing){                    // straight through the platform
+          smashRing(ring);
+          score += 50;
+        }
+        // past this ring, either through its gap or through its wreckage
+        if(ring.level + 1 > depth){
+          depth = ring.level + 1;
+          if(!w) score += 100;
+          combo++;
+          if(combo >= clamp(+cfg.helixSmash || 3, 1, 20)) smashing = true;
+        }
+        hud();
       }
     }
-    ball.y += ball.vy;
+    ball.y = nextY;
 
     // the pad at the bottom
     const bottom = goal.position.y + 0.25;
