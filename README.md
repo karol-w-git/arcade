@@ -73,6 +73,26 @@ screen to within a few percent and still fits a laptop.
 `paddleWidth` is stored against the original 640-wide field and scaled on the way
 in, so an instance tuned before the change keeps the same share of the board.
 
+## Rendering cost
+
+The board renders at **1280x720 in 2D** and is capped at **1920x1080 in 3D**; the
+canvas is stretched to the screen by CSS, so pixels beyond that buy nothing
+visible and cost frames.
+
+Two things to know if you touch the 3D renderer:
+
+- `setPixelRatio()` resizes the canvas itself, so the intended buffer size must be
+  captured *before* calling it. Passing `canvas.width` into `setSize()` afterwards
+  applies the ratio twice - that shipped once, rendering 2880x1620 (4.67 MP) on a
+  1.5x display instead of 1920x1080, at roughly half the frame rate.
+- The shadow map is rendered **on demand** (`shadowMap.autoUpdate = false`), not
+  every frame, since the casters only change when a brick breaks. The ball, paddle
+  and power-ups therefore do not cast shadows: a moving caster would leave its
+  shadow behind in a static map.
+
+Measured on a 1.5x display, same harness, 300 frames: **7.92 ms/frame before,
+3.75 ms/frame after**.
+
 ## Backgrounds
 
 Three modes, per instance:

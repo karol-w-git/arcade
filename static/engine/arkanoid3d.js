@@ -157,11 +157,22 @@ function arkanoid3d(canvas, userConfig, opts){
 
   // ---------------- scene ----------------
   const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  renderer.setSize(canvas.width, canvas.height, false);
+  /* Never render above 1080p. The canvas is stretched to the screen anyway, so
+     extra pixels cost frames and buy nothing visible.
+     NB: setPixelRatio() resizes the canvas itself, so the intended size has to be
+     captured first - passing canvas.width afterwards applies the ratio twice,
+     which is how this shipped rendering 2880x1620 instead of 1920x1080. */
+  const BUF_W = canvas.width, BUF_H = canvas.height;
+  const maxRatio = Math.min(1920 / BUF_W, 1080 / BUF_H, 2);
+  renderer.setPixelRatio(Math.max(1, Math.min(devicePixelRatio || 1, maxRatio)));
+  renderer.setSize(BUF_W, BUF_H, false);
   renderer.setClearColor(0x000000, 0);      // the board backing carries boardAlpha
   renderer.shadowMap.enabled = true;        // shadows are what actually sell the depth
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  /* The casters are static between hits, so the shadow map is rendered on demand
+     rather than every frame - it was a second full pass over ~160 meshes. */
+  renderer.shadowMap.autoUpdate = false;
+  const refreshShadows = () => { renderer.shadowMap.needsUpdate = true; };
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, canvas.width / canvas.height, 0.1, 200);
@@ -227,7 +238,8 @@ function arkanoid3d(canvas, userConfig, opts){
 
   const paddleMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.05 });
   const paddleMesh = new THREE.Mesh(new THREE.BufferGeometry(), paddleMat);
-  paddleMesh.castShadow = true;
+  // deliberately no castShadow: the shadow map is static, and a moving caster
+  // would leave its shadow behind
   board.add(paddleMesh);
 
   function rebuildPaddleGeo(){
@@ -415,6 +427,7 @@ function arkanoid3d(canvas, userConfig, opts){
       bricks.push(k);
       styleBrick(k);
     }
+    refreshShadows();
   }
 
   // paddleWidth is authored against the old 640-wide board; scale it so a
@@ -429,7 +442,6 @@ function arkanoid3d(canvas, userConfig, opts){
 
   function newBall(stuck){
     const mesh = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.1 }));
-    mesh.castShadow = true;
     board.add(mesh);
     const b = { x: paddle.x + paddle.w / 2, y: paddle.y - 12, r: BALL_R, vx: 0, vy: 0, stuck: !!stuck, mesh: mesh };
     styleBall(b);
@@ -520,7 +532,6 @@ function arkanoid3d(canvas, userConfig, opts){
     const t = tex(p.slot);
     const mesh = new THREE.Mesh(puGeo, new THREE.MeshStandardMaterial({
       color: t ? 0xffffff : p.c, emissive: new THREE.Color(p.c).multiplyScalar(0.35), map: t || null }));
-    mesh.castShadow = true;
     board.add(mesh);
     powerups.push({ x: x, y: y, w: 28, h: 28, vy: 2.6, k: p.k, mesh: mesh, spin: 0 });
   }
@@ -703,6 +714,7 @@ function arkanoid3d(canvas, userConfig, opts){
           burst(k);
           board.remove(k.mesh); k.mesh.material.dispose();
           bricks.splice(i, 1);
+          refreshShadows();
           if(k.sup){
             for(const pip of (k.pips || [])) pip.material.dispose();
             for(const lg of (k.logos || [])) lg.material.dispose();
@@ -748,8 +760,8 @@ function arkanoid3d(canvas, userConfig, opts){
       k.mesh.rotation.x = Math.sin(w * 0.45) * 0.12 + (Math.random() - 0.5) * 0.12 * punch;
       // swell and flash on impact, settling back over ~260ms
       k.mesh.scale.setScalar(1 + 0.13 * punch);
-      const acc = new THREE.Color(cfg.accent);
-      k.mesh.material.emissive = acc.clone().multiplyScalar(0.35 + 0.9 * punch);
+      // reuse one Color: this runs every frame
+      k.mesh.material.emissive.set(superCol()).multiplyScalar(0.35 + 0.9 * punch);
     }
 
     // the tilt breathes a little so the depth reads, plus a knock on impact

@@ -433,16 +433,18 @@ function arkanoid(cv, userConfig, opts){
   }
 
   function drawShards(){
+    if(!shards.length) return;
+    // one save/restore for the whole burst, and setTransform instead of a
+    // translate+rotate pair per shard - this runs for up to 600 of them
+    ctx.save();
     for(const p of shards){
-      ctx.save();
+      const c = Math.cos(p.rot), s2 = Math.sin(p.rot);
+      ctx.setTransform(c, s2, -s2, c, p.x, p.y);
       ctx.globalAlpha = clamp(p.life, 0, 1);
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
       ctx.fillStyle = p.c;
       ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s);
-      ctx.restore();
     }
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
 function hitBricks(b){
