@@ -143,16 +143,45 @@ function helix(canvas, userConfig, opts){
 
   const shardGeo = new THREE.BoxGeometry(0.3, 0.16, 0.3);
 
-  // one wedge geometry per (sweep) value, cached: a pie slice with thickness
+  /* A wedge as a closed solid. CylinderGeometry with a thetaLength leaves the two
+     cut faces open, so a slice looked hollow from any angle that saw its side.
+     Extruding an annular sector gives every face: outer arc, inner arc, both cut
+     faces, top and bottom.
+
+     The shape is drawn in XY and laid flat, which rotates it a quarter turn: a
+     shape angle p ends up at world atan2(x, z) = p + PI/2. Drawing from -PI/2
+     therefore puts the wedge at world [0, sweep], which is the range the
+     collision test uses once the mesh is turned by `start`. */
   const wedgeGeos = {};
   function wedgeGeo(sweep){
     const k = sweep.toFixed(3);
     if(!wedgeGeos[k]){
-      wedgeGeos[k] = new THREE.CylinderGeometry(
-        R_OUT, R_OUT, PLATE_H, Math.max(4, Math.round(24 * sweep / TAU) + 3), 1,
-        false, 0, sweep);
+      const segs = Math.max(6, Math.round(40 * sweep / TAU));
+      const a0 = -Math.PI / 2, a1 = a0 + sweep;
+      const sh = new THREE.Shape();
+      sh.absarc(0, 0, R_OUT, a0, a1, false);      // outer edge
+      sh.absarc(0, 0, R_IN, a1, a0, true);        // and back along the core
+      const geo = new THREE.ExtrudeGeometry(sh, {
+        depth: PLATE_H, bevelEnabled: false, curveSegments: segs });
+      geo.rotateX(-Math.PI / 2);                  // stand it up as a floor
+      geo.translate(0, -PLATE_H / 2, 0);          // centre it: the extrusion runs 0..depth,
+                                                  // and the physics expects the top face at +PLATE_H/2
+      wedgeGeos[k] = geo;
     }
     return wedgeGeos[k];
+  }
+
+  // spikes, so a deadly wedge reads as deadly rather than merely red
+  const spikeGeo = new THREE.ConeGeometry(0.16, 0.42, 5);
+  const spikeMat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.15 });
+  function addSpikes(mesh, sweep){
+    const rMid = (R_IN + R_OUT) / 2;
+    for(let i = 1; i <= 3; i++){
+      const a = sweep * (i / 4);                  // spread across the wedge
+      const sp = new THREE.Mesh(spikeGeo, spikeMat);
+      sp.position.set(Math.sin(a) * rMid, PLATE_H / 2 + 0.21, Math.cos(a) * rMid);
+      mesh.add(sp);                               // inherits the parent's visibility
+    }
   }
 
   // ---------------- building the tower ----------------
@@ -193,6 +222,7 @@ function helix(canvas, userConfig, opts){
         // With -start the tower rendered mirrored: the visible gap was never the
         // real one, and the game was unplayable.
         mesh.rotation.y = start;
+        if(hazard) addSpikes(mesh, slotAngle * 0.985);
         tower.add(mesh);
         wedges.push({ mesh: mesh, start: start, sweep: slotAngle * 0.985, hazard: hazard });
       }
@@ -211,6 +241,8 @@ function helix(canvas, userConfig, opts){
         m.emissive = new THREE.Color(w.hazard ? hz : '#000000').multiplyScalar(w.hazard ? 0.25 : 0);
       }
     }
+    spikeMat.color = new THREE.Color(hz).lerp(new THREE.Color('#ffffff'), 0.45);
+    spikeMat.emissive = new THREE.Color(hz).multiplyScalar(0.35);
     coreMat.color = new THREE.Color(cfg.bg || '#05070f').lerp(new THREE.Color(accentCol()), 0.35);
     ballMat.color = new THREE.Color(cfg.ballColor || '#e8ecf8');
     ballMat.emissive = new THREE.Color(cfg.ballColor || '#e8ecf8').multiplyScalar(0.35);
@@ -553,7 +585,7 @@ function helix(canvas, userConfig, opts){
       shards.forEach(p => { scene.remove(p.mesh); p.mat.dispose(); });
       shards = [];
       for(const k in wedgeGeos) wedgeGeos[k].dispose();
-      shardGeo.dispose();
+      shardGeo.dispose(); spikeGeo.dispose(); spikeMat.dispose();
       renderer.dispose();
     }
   };

@@ -83,7 +83,16 @@ way, and cost a life. Reaching the pad at the bottom wins, and that pad carries
 the **goalPad** sprite, so the event logo is the thing you land on.
 
 Its own **Tower** panel sets depth, wedges per ring, gap width, hazard share,
-spin sensitivity and drops-to-smash, plus the hazard and pad colours. `mode: dig`
+spin sensitivity and drops-to-smash, plus the hazard and pad colours. Hazard
+wedges carry spikes, so "deadly" reads at a glance rather than depending on
+colour alone.
+
+A wedge is an **extruded annular sector**, not a `CylinderGeometry` slice: three's
+cylinder leaves the two cut faces open, so slices looked hollow from any angle
+that saw their side. Note the extrusion runs 0..depth and the shape is drawn in
+XY then laid flat, so the geometry needs centring on its own plane and a quarter
+turn of angle offset - both easy to get wrong, and both worth re-measuring against
+the collision test after any change. `mode: dig`
 puts it on the clock exactly like the brick games.
 
 ## Board shape
