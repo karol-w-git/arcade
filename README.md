@@ -99,14 +99,13 @@ the top middle behind a three-hit cap, and breaking it before the clock runs out
 wins the round (+2000). The cube is square in board space - two bricks wide and
 just as tall - so it renders as an actual cube in 3D and as a shaded box in 2D.
 Upload an image to the **brickSuper** sprite slot and it appears on its faces:
-this is where a company logo goes. Remaining hits are shown as segments of the
-cube's **border**, which go dark one by one - the face is left clear for the logo.
+this is where a company logo goes. Remaining hits show as dots spaced around the
+cube's **border**, going dark one by one - the face is left clear for the logo.
 
 Time limit (15 s - 10 min) and the cube's hit count (1-20) are per instance, as
 are the cube's **colour** (or "follow accent"), the **logo size** on its faces,
-and the **thickness and colour** of the hit segments. **Damage darkening** (Colors
-panel) sets how far any brick dims as it is worn down - 0 keeps every brick at
-full colour - Hits show as dots spaced around the cube's border.
+and the **size and colour** of the hit dots. **Damage darkening** (Colors panel)
+sets how far any brick dims as it is worn down; 0 keeps every brick at full colour.
 
 A **Text** panel holds the two text colours: **body text** (titles, help line,
 player name) and **accented text** (scores, clock, prompts). Accented text used to
@@ -157,8 +156,9 @@ Animated GIFs do not animate once drawn to canvas; use the background for motion
 ## Players and scores
 
 When "ask each player for a name" is on, the game opens with a name prompt, plays under
-that name, and on death offers **Play again** / **Next player** / **Scores** — so a queue
-of people can hand the keyboard around without reloading.
+that name, and on death offers **Next player** / **Scores** — so a queue of people can
+hand the keyboard around without reloading. There is deliberately no "play again":
+at an event the queue moves on.
 
 **`P` opens the high-score list** from anywhere: mid-game, at the name prompt, or on the
 game-over screen. It pauses play while open. Pause moved to **`Esc`** to free `P` up.
