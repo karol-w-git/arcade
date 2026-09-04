@@ -43,23 +43,23 @@
           <div class="field"><label for="pageBg">Page background</label><input type="color" id="pageBg"></div>
           <div class="field"><label for="bg">Board background</label><input type="color" id="bg"></div>
           <div class="field"><label for="accent">Accent / glow</label><input type="color" id="accent"></div>
-          {% if 'paddleColor' in config %}
+          {% if 'paddleColor' in meta.defaults %}
           <div class="field"><label for="paddleColor">Paddle</label><input type="color" id="paddleColor"></div>
           {% endif %}
           <div class="field"><label for="ballColor">Ball</label><input type="color" id="ballColor"></div>
         </div>
         <div class="field">
-          <label>{{ 'Wedge palette' if 'helixLevels' in config else 'Brick palette' }}</label>
+          <label>{{ 'Wedge palette' if 'helixLevels' in meta.defaults else 'Brick palette' }}</label>
           <div class="palette" id="palette"></div>
         </div>
-        {% if 'damageDarken' in config %}
+        {% if 'damageDarken' in meta.defaults %}
         <div class="field">
           <label for="damageDarken">Damage darkening <b id="damageDarkenV"></b></label>
           <input type="range" id="damageDarken" min="0" max="0.8" step="0.02">
           <div class="hint">How much a brick dims as it is worn down. 0 keeps every brick at full colour.</div>
         </div>
         {% endif %}
-        {% if 'grid' in config %}
+        {% if 'grid' in meta.defaults %}
         <div class="field">
           <label class="check"><input type="checkbox" id="grid"> Grid lines on the board</label>
         </div>
@@ -80,7 +80,7 @@
             <label for="textColor">Body text</label>
             <input type="color" id="textColor">
             <label class="check" style="margin-top:8px">
-              <input type="checkbox" id="textColorAuto"> {{ 'Follow paddle' if 'paddleColor' in config else 'Use the default' }}
+              <input type="checkbox" id="textColorAuto"> {{ 'Follow paddle' if 'paddleColor' in meta.defaults else 'Use the default' }}
             </label>
             <div class="hint">Titles, help line, player name.</div>
           </div>
@@ -104,7 +104,7 @@
         <div class="field">
           <label for="mode">Objective</label>
           <select id="mode">
-            {% if 'helixLevels' in config %}
+            {% if 'helixLevels' in meta.defaults %}
             <option value="classic">Classic — reach the pad at the bottom</option>
             <option value="dig">Timed — reach the pad before the clock runs out</option>
             {% else %}
@@ -117,12 +117,12 @@
           <div class="two">
             <div class="field"><label for="timeLimit">Time limit <b id="timeLimitV"></b></label>
               <input type="range" id="timeLimit" min="15" max="600" step="5"></div>
-            {% if 'superHp' in config %}
+            {% if 'superHp' in meta.defaults %}
             <div class="field"><label for="superHp">Superblock hits <b id="superHpV"></b></label>
               <input type="range" id="superHp" min="1" max="20" step="1"></div>
             {% endif %}
           </div>
-          {% if 'superHp' in config %}
+          {% if 'superHp' in meta.defaults %}
           <div class="hint" style="margin-bottom:14px">
             The cube is walled in at the top middle with a hard cap underneath — the only
             way in is straight up the middle. Breaking it wins the round.
@@ -154,7 +154,7 @@
         </div>
       </div>
 
-      {% if 'helixLevels' in config %}
+      {% if 'helixLevels' in meta.defaults %}
       <div class="panel">
         <h3>Tower</h3>
         <div class="two">
@@ -202,24 +202,24 @@
         <div class="two">
           <div class="field"><label for="lives">Lives <b id="livesV"></b></label>
             <input type="range" id="lives" min="1" max="9" step="1"></div>
-          {% if 'ballSpeed' in config %}
+          {% if 'ballSpeed' in meta.defaults %}
           <div class="field"><label for="ballSpeed">Ball speed <b id="ballSpeedV"></b></label>
             <input type="range" id="ballSpeed" min="3" max="14" step="0.2"></div>
           {% endif %}
-          {% if 'paddleWidth' in config %}
+          {% if 'paddleWidth' in meta.defaults %}
           <div class="field"><label for="paddleWidth">Paddle width <b id="paddleWidthV"></b></label>
             <input type="range" id="paddleWidth" min="50" max="260" step="5"></div>
           {% endif %}
-          {% if 'level' in config %}
+          {% if 'level' in meta.defaults %}
           <div class="field"><label for="level">Starting level</label>
             <select id="level"><option value="0">1</option><option value="1">2</option>
               <option value="2">3</option><option value="3">4</option></select></div>
           {% endif %}
         </div>
-        {% if 'powerups' in config %}
+        {% if 'powerups' in meta.defaults %}
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="powerups"> Power-up drops (off by default)</label>
         {% endif %}
-        <label class="check"><input type="checkbox" id="particles"> Debris burst when a {{ 'platform shatters' if 'helixLevels' in config else 'brick breaks' }}</label>
+        <label class="check"><input type="checkbox" id="particles"> Debris burst when a {{ 'platform shatters' if 'helixLevels' in meta.defaults else 'brick breaks' }}</label>
         <div class="hint">Gameplay changes restart the preview.</div>
       </div>
 
@@ -236,14 +236,14 @@
         <label class="check" style="margin-bottom:14px">
           <input type="checkbox" id="frame"> Frame around the play area
         </label>
-        {% if 'boardAlpha' in config %}
+        {% if 'boardAlpha' in meta.defaults %}
         <div class="field">
           <label for="boardAlpha">Board opacity <b id="boardAlphaV"></b></label>
           <input type="range" id="boardAlpha" min="0" max="1" step="0.05">
           <div class="hint">Turn it down to let the background show through the play area.</div>
         </div>
         {% endif %}
-        {% if 'tiltX' in config %}
+        {% if 'tiltX' in meta.defaults %}
         <div class="two">
           <div class="field"><label for="tiltX">Tilt back <b id="tiltXV"></b></label>
             <input type="range" id="tiltX" min="-0.6" max="0.6" step="0.01"></div>
