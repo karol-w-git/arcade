@@ -184,6 +184,20 @@
           bounce <i>more</i> often. Height stays capped below one level either way,
           so the ball can never climb back up the tower.
         </div>
+        <div class="field">
+          <label for="helixSeed">Layout</label>
+          <div style="display:flex; gap:8px; align-items:center">
+            <input type="number" id="helixSeed" min="1" max="999999" step="1" style="flex:1">
+            <button type="button" class="btn sm" id="shuffleSeed">Try another</button>
+          </div>
+          <div class="hint">
+            The tower is fixed: this number is the layout, and every player gets the
+            same one, so their scores are comparable. The gaps walk around the tower
+            a slot at a time, which is what makes them a route to the pad rather than
+            a fresh guess each ring. <b>Try another</b> rolls a different layout -
+            find one you like and leave it alone.
+          </div>
+        </div>
         <div class="two">
           <div class="field"><label for="hazardColor">Hazard colour</label>
             <input type="color" id="hazardColor"></div>
@@ -577,6 +591,7 @@ function fromForm(){
     config.helixSpin = +$('helixSpin').value;
     config.helixBounce = +$('helixBounce').value;
     config.helixTempo = +$('helixTempo').value;
+    config.helixSeed = clampSeed($('helixSeed').value);
     config.goalColor = $('goalColorAuto').checked ? '' : $('goalColor').value;
     $('goalColor').disabled = $('goalColorAuto').checked;
   }
@@ -625,8 +640,11 @@ function readTilt(){
   $('tiltYV').textContent = Math.round(config.tiltY * 57) + '°';
 }
 
+const clampSeed = v => Math.max(1, Math.min(999999, Math.round(+v || 1)));
+
 function showHelix(){
   if(!has('helixLevels')) return;
+  $('helixSeed').value = config.helixSeed;
   $('helixLevelsV').textContent = config.helixLevels + ' rings';
   $('helixSlotsV').textContent = config.helixSlots;
   $('helixGapV').textContent = config.helixGap;
@@ -659,6 +677,12 @@ function syncBgRows(){
   $('htmlRow').style.display   = $('bgMode').value === 'custom' ? '' : 'none';
 }
 
+if($('shuffleSeed')) $('shuffleSeed').onclick = () => {
+  config.helixSeed = 1 + Math.floor(Math.random() * 999999);
+  $('helixSeed').value = config.helixSeed;
+  push(true);                                   // a new layout needs a fresh game
+};
+
 if($('clearScores')) $('clearScores').onclick = async () => {
   if(!confirm('Delete every recorded score for this game?')) return;
   const r = await fetch('/api/instances/' + currentId + '/scores', { method: 'DELETE' });
@@ -667,7 +691,7 @@ if($('clearScores')) $('clearScores').onclick = async () => {
 
 // Gameplay params only take effect on a fresh game, so those inputs force a restart.
 const RESTART_ON = new Set(['lives', 'ballSpeed', 'paddleWidth', 'level', 'powerups', 'particles', 'mode', 'timeLimit', 'superHp', 'pipSize',
-  'helixLevels', 'helixSlots', 'helixGap', 'helixHazard', 'helixSmash', 'helixBounce', 'helixTempo']);
+  'helixLevels', 'helixSlots', 'helixGap', 'helixHazard', 'helixSmash', 'helixBounce', 'helixTempo', 'helixSeed']);
 function onChange(e){
   fromForm();
   push(e && RESTART_ON.has(e.target.id));

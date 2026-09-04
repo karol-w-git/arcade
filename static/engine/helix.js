@@ -32,6 +32,7 @@ const DEFAULTS = {
   helixSmash: 3,          // clean drops needed before the ball smashes through
   helixBounce: 1.0,       // multiplier on the hop off a platform
   helixTempo: 1.0,        // time scale: below 1 the whole fall runs slower
+  helixSeed: 1,           // the tower is this seed's layout, the same every play
   hazardColor: '#e63946',
   goalColor: '',          // '' follows the accent
 };
@@ -66,6 +67,21 @@ const V_CAP = Math.sqrt(2 * Math.abs(GRAVITY) * LEVEL_H * 0.8);
 const tempoOf = c => clamp(+c.helixTempo || 1, 0.4, 1.5);
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+/* mulberry32: a small seeded PRNG, so a tower is a property of its instance
+   rather than of the moment somebody pressed start. Two players at an event get
+   the same tower and their scores mean the same thing; a layout you liked can be
+   found again by its seed instead of hoped for. Only the layout uses this -
+   debris and camera shake stay genuinely random, since nobody compares those. */
+function rng(seed){
+  let a = (seed >>> 0) || 1;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 const TAU = Math.PI * 2;
 
 /* Angles are awkward here: a wedge spans [a, a+w] in tower-local space, and the
@@ -225,9 +241,18 @@ function helix(canvas, userConfig, opts){
     const hazardShare = clamp(+cfg.helixHazard === undefined ? 0.22 : +cfg.helixHazard, 0, 0.6);
     const pal = cfg.brickColors && cfg.brickColors.length ? cfg.brickColors : DEFAULTS.brickColors;
 
+    const rand = rng(clamp(+cfg.helixSeed || 1, 1, 999999));
+
+    /* The gap walks around the tower by at most one slot per ring, so the gaps
+       line up into a single continuous route from the top to the pad rather than
+       scattering. Every ring is reachable from the one above with a small turn,
+       which is what makes the tower a level with a way through instead of a
+       sequence of independent guesses. */
+    let gapStart = Math.floor(rand() * slots);
+
     for(let i = 0; i < n; i++){
       const y = -i * LEVEL_H;
-      const gapStart = Math.floor(Math.random() * slots);
+      if(i > 0) gapStart = (gapStart + (Math.floor(rand() * 3) - 1) + slots) % slots;
       const wedges = [];
       // the first two rings are always safe, so nobody dies before they have
       // understood the controls
@@ -235,7 +260,7 @@ function helix(canvas, userConfig, opts){
       for(let s = 0; s < slots; s++){
         const isGap = ((s - gapStart + slots) % slots) < gapSlots;
         if(isGap) continue;
-        const hazard = allowHazard && Math.random() < hazardShare;
+        const hazard = allowHazard && rand() < hazardShare;
         const start = s * slotAngle;
         const mesh = new THREE.Mesh(wedgeGeo(slotAngle * 0.985),
           new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.08 }));

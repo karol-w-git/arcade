@@ -82,9 +82,26 @@ that smashes platforms instead of bouncing - red hazard wedges stay fatal either
 way, and cost a life. Reaching the pad at the bottom wins, and that pad carries
 the **goalPad** sprite, so the event logo is the thing you land on.
 
+The tower is **fixed, not random**: `helixSeed` is the layout, so every player
+gets the same one and their scores are comparable. The gap walks around the
+tower by at most one slot per ring, which turns the gaps into a continuous route
+to the pad instead of an independent guess per ring, and hazards are only ever
+placed on wedges - never in a gap - so the route is always clear. Every seed is
+therefore completable; four were played to the pad on a plain constant spin to
+check. **Try another** in the editor rolls a different layout.
+
 Its own **Tower** panel sets depth, wedges per ring, gap width, hazard share,
-spin sensitivity, drops-to-smash and **bounce height**, plus the hazard and pad
-colours. Bounce height scales the hop off a platform but is clamped to 80% of the
+spin sensitivity, drops-to-smash, the layout seed, **bounce speed** and **bounce
+height**, plus the hazard and pad colours.
+
+**Bounce speed vs bounce height.** These are different dials and they pull
+opposite ways, which is easy to get wrong: a shorter hop is over sooner, so
+turning the height down makes the ball bounce *more* often. `helixTempo` scales
+time rather than strength - one frame of time scaled by `t` means velocity
+scales by `t` and acceleration by `t*t`, so `apex = v^2/2g` is unchanged while
+`period = 2v/g` becomes `period/t`. The arc keeps its shape and only the tempo
+moves. Measured frames between bounces: 39 at 0.5x, 20 at 1.0x, 13 at 1.5x, with
+the apex flat at 0.94-1.05 units throughout. Bounce height scales the hop off a platform but is clamped to 80% of the
 level spacing however far it is turned up, so the ball can never climb the tower -
 which is exactly what an uncapped bounce did the first time this shipped.
 
