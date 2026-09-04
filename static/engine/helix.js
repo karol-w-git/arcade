@@ -17,7 +17,7 @@
 
 const DEFAULTS = {
   bg: '#05070f', pageBg: '#0a0c14', accent: '#4cc9f0',
-  ballColor: '#e8ecf8', paddleColor: '#e8ecf8',
+  ballColor: '#e8ecf8',
   brickColors: ['#f72585', '#b5179e', '#7209b7', '#4361ee', '#4cc9f0', '#3ddc97', '#ffd166', '#ff8c42'],
   accentTextColor: '', textColor: '',
   lives: 3, particles: true, boardAlpha: 1, sprites: {},
@@ -30,9 +30,9 @@ const DEFAULTS = {
   helixHazard: 0.22,      // share of remaining wedges that are deadly
   helixSpin: 1.0,         // rotation sensitivity
   helixSmash: 3,          // clean drops needed before the ball smashes through
+  helixBounce: 1.0,       // multiplier on the hop off a platform
   hazardColor: '#e63946',
   goalColor: '',          // '' follows the accent
-  damageDarken: 0.32
 };
 
 // tower geometry, in world units
@@ -42,6 +42,10 @@ const LEVEL_H = 2.6, BALL_R = 0.52;
 // so 0.22 gives ~1.1 units against a 2.6-unit spacing. It used to be 0.58, an
 // apex of 7.6 units: the ball climbed the tower instead of descending it.
 const GRAVITY = -0.022, BOUNCE = 0.22, MAX_FALL = -0.45;
+/* helixBounce scales that hop, but the cap is what matters: an apex of a whole
+   level would let the ball climb the tower instead of descending it, so the
+   result is clamped to 80% of the spacing however high the setting goes. */
+const V_CAP = Math.sqrt(2 * Math.abs(GRAVITY) * LEVEL_H * 0.8);
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const TAU = Math.PI * 2;
@@ -77,7 +81,8 @@ function helix(canvas, userConfig, opts){
   const levels = () => clamp(+cfg.helixLevels || 24, 5, 80);
   const accentCol = () => cfg.accent || '#4cc9f0';
   const goalCol = () => cfg.goalColor || accentCol();
-  const dmg = () => clamp(cfg.damageDarken === undefined ? 0.32 : +cfg.damageDarken, 0, 0.8);
+  const bounceV = () =>
+    Math.min(BOUNCE * clamp(+cfg.helixBounce || 1, 0.3, 2), V_CAP);
 
   const hud = () => onHud && onHud({
     score: score, lives: lives, level: depth, state: state,
@@ -470,7 +475,7 @@ function helix(canvas, userConfig, opts){
         }
         if(w && !smashing){                   // land on it and hop
           ball.y = ring.y + PLATE_H / 2 + BALL_R;
-          ball.vy = BOUNCE;
+          ball.vy = bounceV();
           combo = 0;
           smashing = false;
           shake = Math.max(shake, 3);
@@ -576,7 +581,9 @@ function helix(canvas, userConfig, opts){
     pause(){ if(state === 'play') state = 'paused'; hud(); },
     resume(){ if(state === 'paused') state = 'play'; hud(); },
     setBlocked(v){ blocked = !!v; dragging = false; for(const k in keys) keys[k] = false; },
-    getState(){ return { score: score, lives: lives, level: depth, state: state }; },
+    // ballY/ballVy are here so a test can measure the physics, not just watch it
+    getState(){ return { score: score, lives: lives, level: depth, state: state,
+                         ballY: ball.y, ballVy: ball.vy }; },
     destroy(){
       dead = true;
       cancelAnimationFrame(raf);

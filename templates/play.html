@@ -165,10 +165,10 @@ function paintChrome(cfg){
   document.body.style.background = cfg.bgStyle === 'flat'
     ? cfg.pageBg
     : 'radial-gradient(circle at 50% -5%, ' + cfg.bg + ' 0%, ' + cfg.pageBg + ' 65%)';
-  document.body.style.color = cfg.textColor || cfg.paddleColor;
+  document.body.style.color = cfg.textColor || cfg.paddleColor || '#e8ecf8';
   document.body.style.setProperty('--accent', cfg.accent);
   document.body.style.setProperty('--accent-text', cfg.accentTextColor || cfg.accent);
-  document.body.style.setProperty('--text', cfg.textColor || cfg.paddleColor);
+  document.body.style.setProperty('--text', cfg.textColor || cfg.paddleColor || '#e8ecf8');
   // sheets sit on the board colour, lifted slightly so they read against the page
   const S = document.body.style;
   S.setProperty('--sheet-bg', mixHex(cfg.bg, cfg.pageBg, 0.5));

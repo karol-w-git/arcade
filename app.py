@@ -55,6 +55,14 @@ SPRITE_SLOTS = ["paddle", "ball", "brick1", "brick2", "brick3", "brickSolid",
                 # company logos at events. Handled by the page, not the engine.
                 "overlay"]
 
+
+def slots_for(game_type: str):
+    """The sprite slots one game type can actually use, in SPRITE_SLOTS order."""
+    only = GAME_TYPES[game_type].get("slots")
+    if only is None:                    # brick games: everything but the tower pad
+        only = [s for s in SPRITE_SLOTS if s != "goalPad"]
+    return [s for s in SPRITE_SLOTS if s in only]
+
 GAME_TYPES = {
     "arkanoid": {
         "name": "Arkanoid",
@@ -128,11 +136,12 @@ GAME_TYPES["helix"] = {
     "engine": "engine/helix.js",
     "libs": ["vendor/three.min.js"],
     "dimensions": "3D",
+    # no paddle, no bricks: offering those slots here only invites confusion
+    "slots": ["ball", "goalPad", "boardBg", "overlay"],
     "defaults": {
         "bg": "#05070f",
         "pageBg": "#0a0c14",
         "accent": "#4cc9f0",
-        "paddleColor": "#e8ecf8",
         "ballColor": "#e8ecf8",
         "brickColors": ["#f72585", "#b5179e", "#7209b7", "#4361ee",
                         "#4cc9f0", "#3ddc97", "#ffd166", "#ff8c42"],
@@ -154,7 +163,6 @@ GAME_TYPES["helix"] = {
         "askName": True,
         "scoreboard": True,
         "sprites": {},
-        "damageDarken": 0.32,
         # objective: 'dig' puts it on the clock, same as the brick games
         "mode": "classic",
         "timeLimit": 90,
@@ -165,6 +173,7 @@ GAME_TYPES["helix"] = {
         "helixHazard": 0.22,    # share of the rest that are deadly
         "helixSpin": 1.0,       # rotation sensitivity
         "helixSmash": 3,        # clean drops before the ball smashes through
+        "helixBounce": 1.0,     # multiplier on the hop off a platform
         "hazardColor": "#e63946",
         "goalColor": "",        # "" follows the accent
     },
@@ -396,6 +405,7 @@ def clean_config(game_type: str, raw: dict) -> dict:
     clamp_float("helixHazard", 0.0, 0.6)
     clamp_float("helixSpin", 0.2, 3.0)
     clamp_int("helixSmash", 1, 20)
+    clamp_float("helixBounce", 0.3, 2.0)
     if "helixGap" in out:               # never wide enough to swallow the ring
         out["helixGap"] = max(1, min(max(1, out["helixSlots"] - 2), int(out["helixGap"])))
     if "mode" in out and out["mode"] not in ("classic", "dig"):
@@ -475,7 +485,7 @@ def new_instance(game_type):
     return render_template("editor.html", instance=None, game_type=game_type,
                            meta=GAME_TYPES[game_type],
                            config=GAME_TYPES[game_type]["defaults"],
-                           sprite_slots=SPRITE_SLOTS, scores=[])
+                           sprite_slots=slots_for(game_type), scores=[])
 
 
 @app.route("/edit/<int:iid>")
@@ -491,7 +501,7 @@ def edit_instance(iid):
                            game_type=inst["game_type"],
                            meta=GAME_TYPES[inst["game_type"]],
                            config=inst["config"],
-                           sprite_slots=SPRITE_SLOTS,
+                           sprite_slots=slots_for(inst["game_type"]),
                            scores=[dict(r) for r in rows])
 
 

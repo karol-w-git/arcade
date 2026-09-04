@@ -83,7 +83,16 @@ way, and cost a life. Reaching the pad at the bottom wins, and that pad carries
 the **goalPad** sprite, so the event logo is the thing you land on.
 
 Its own **Tower** panel sets depth, wedges per ring, gap width, hazard share,
-spin sensitivity and drops-to-smash, plus the hazard and pad colours. Hazard
+spin sensitivity, drops-to-smash and **bounce height**, plus the hazard and pad
+colours. Bounce height scales the hop off a platform but is clamped to 80% of the
+level spacing however far it is turned up, so the ball can never climb the tower -
+which is exactly what an uncapped bounce did the first time this shipped.
+
+The editor renders **only the controls a type declares**. `slots_for()` does the
+same for sprite slots. Helix Jump therefore shows no paddle, ball speed, power-ups
+or superblock cube, and offers only the ball, goal pad and board background as
+images. Every optional control is read through a `has()` guard: a missing input
+would otherwise throw and leave the rest of the form unread. Hazard
 wedges carry spikes, so "deadly" reads at a glance rather than depending on
 colour alone.
 
