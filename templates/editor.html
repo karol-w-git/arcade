@@ -236,11 +236,13 @@
         <label class="check" style="margin-bottom:14px">
           <input type="checkbox" id="frame"> Frame around the play area
         </label>
+        {% if 'boardAlpha' in config %}
         <div class="field">
           <label for="boardAlpha">Board opacity <b id="boardAlphaV"></b></label>
           <input type="range" id="boardAlpha" min="0" max="1" step="0.05">
           <div class="hint">Turn it down to let the background show through the play area.</div>
         </div>
+        {% endif %}
         {% if 'tiltX' in config %}
         <div class="two">
           <div class="field"><label for="tiltX">Tilt back <b id="tiltXV"></b></label>
@@ -638,7 +640,8 @@ function showAlpha(){
   $('timeLimitV').textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
   if(has('superHp')) $('superHpV').textContent = config.superHp;
   $('digRow').style.display = $('mode').value === 'dig' ? '' : 'none';
-  $('boardAlphaV').textContent = Math.round(config.boardAlpha * 100) + '%';
+  if(has('boardAlpha'))
+    $('boardAlphaV').textContent = Math.round(config.boardAlpha * 100) + '%';
   $('overlaySizeV').textContent = config.overlaySize + '%';
   $('overlayOpacityV').textContent = Math.round(config.overlayOpacity * 100) + '%';
 }

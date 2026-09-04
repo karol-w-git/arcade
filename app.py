@@ -68,7 +68,8 @@ GAME_TYPES = {
         "name": "Arkanoid",
         "blurb": "Brick breaker with power-ups, 4 levels and steerable bounce.",
         "engine": "engine/arkanoid.js",
-        "libs": [],
+        # levels.js defines Arcade.LEVELS, so it has to load first
+        "libs": ["engine/levels.js"],
         "dimensions": "2D",
         "defaults": {
             "bg": "#05070f",
@@ -149,7 +150,6 @@ GAME_TYPES["helix"] = {
         "accentTextColor": "",
         "lives": 3,
         "particles": True,
-        "boardAlpha": 1.0,
         "frame": True,
         "bgStyle": "radial",
         "bgMode": "color",
@@ -185,7 +185,7 @@ GAME_TYPES["arkanoid3d"] = {
     "blurb": "The same game, on a board tilted into 3D - bevelled bricks, "
              "lighting and depth. Plays identically to the 2D version.",
     "engine": "engine/arkanoid3d.js",
-    "libs": ["vendor/three.min.js"],
+    "libs": ["vendor/three.min.js", "engine/levels.js"],
     "dimensions": "3D",
     "defaults": dict(GAME_TYPES["arkanoid"]["defaults"], grid=True,
                      tiltX=0.22, tiltY=0.17),

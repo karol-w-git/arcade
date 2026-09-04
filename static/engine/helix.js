@@ -20,7 +20,7 @@ const DEFAULTS = {
   ballColor: '#e8ecf8',
   brickColors: ['#f72585', '#b5179e', '#7209b7', '#4361ee', '#4cc9f0', '#3ddc97', '#ffd166', '#ff8c42'],
   accentTextColor: '', textColor: '',
-  lives: 3, particles: true, boardAlpha: 1, sprites: {},
+  lives: 3, particles: true, sprites: {},
   mode: 'classic',        // 'dig' adds the clock; the goal is the same
   timeLimit: 90,
   // helix-specific
@@ -49,14 +49,6 @@ const V_CAP = Math.sqrt(2 * Math.abs(GRAVITY) * LEVEL_H * 0.8);
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const TAU = Math.PI * 2;
-
-function darken(hex, amount){
-  if(!amount) return hex;
-  const n = parseInt((hex || '#888888').slice(1), 16), f = 1 - amount;
-  return ((Math.round(((n >> 16) & 255) * f) << 16) |
-          (Math.round(((n >> 8) & 255) * f) << 8) |
-           Math.round((n & 255) * f));
-}
 
 /* Angles are awkward here: a wedge spans [a, a+w] in tower-local space, and the
    ball always sits at world angle 0. Rotating the tower by `spin` puts the ball
