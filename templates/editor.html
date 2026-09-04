@@ -170,13 +170,19 @@
             <input type="range" id="helixSpin" min="0.2" max="3" step="0.1"></div>
           <div class="field"><label for="helixSmash">Drops to smash <b id="helixSmashV"></b></label>
             <input type="range" id="helixSmash" min="1" max="20" step="1"></div>
+          <div class="field"><label for="helixTempo">Bounce speed <b id="helixTempoV"></b></label>
+            <input type="range" id="helixTempo" min="0.4" max="1.5" step="0.05"></div>
           <div class="field"><label for="helixBounce">Bounce height <b id="helixBounceV"></b></label>
             <input type="range" id="helixBounce" min="0.3" max="2" step="0.05"></div>
         </div>
         <div class="hint" style="margin-bottom:14px">
-          Bounce height scales the hop off a platform. Turn it down and the ball
-          settles onto a platform instead of dribbling on it. It stays capped below
-          one level either way, so the ball can never climb back up the tower.
+          <b>Bounce speed</b> is the one that fixes frantic bouncing: it stretches
+          the clock the ball falls on, so below 1.0x everything runs slower and the
+          hops come further apart. The arc keeps its shape.
+          <b>Bounce height</b> is how far the hop goes, and it is not the same dial -
+          a shorter hop is over sooner, so turning the height down makes the ball
+          bounce <i>more</i> often. Height stays capped below one level either way,
+          so the ball can never climb back up the tower.
         </div>
         <div class="two">
           <div class="field"><label for="hazardColor">Hazard colour</label>
@@ -404,7 +410,7 @@ const COLOR_KEYS = ['pageBg','bg','accent','paddleColor','ballColor','pipColor',
 const NUM_KEYS = ['lives','ballSpeed','paddleWidth','boardAlpha','overlaySize','overlayOpacity',
                   'timeLimit','superHp','logoScale','pipSize','damageDarken',
                   'helixLevels','helixSlots','helixGap','helixHazard','helixSpin','helixSmash',
-                  'helixBounce']
+                  'helixBounce','helixTempo']
   .filter(k => document.getElementById(k));
 const PRESETS = {
   'Midnight':  { pageBg:'#0a0c14', bg:'#05070f', accent:'#4cc9f0', paddleColor:'#e8ecf8', ballColor:'#e8ecf8',
@@ -570,6 +576,7 @@ function fromForm(){
     config.helixHazard = +$('helixHazard').value;
     config.helixSpin = +$('helixSpin').value;
     config.helixBounce = +$('helixBounce').value;
+    config.helixTempo = +$('helixTempo').value;
     config.goalColor = $('goalColorAuto').checked ? '' : $('goalColor').value;
     $('goalColor').disabled = $('goalColorAuto').checked;
   }
@@ -627,6 +634,7 @@ function showHelix(){
   $('helixSpinV').textContent = (+config.helixSpin).toFixed(1) + 'x';
   $('helixSmashV').textContent = config.helixSmash;
   $('helixBounceV').textContent = (+config.helixBounce).toFixed(2) + 'x';
+  $('helixTempoV').textContent = (+config.helixTempo).toFixed(2) + 'x';
   // the gap can never swallow the whole ring
   $('helixGap').max = Math.max(1, config.helixSlots - 2);
 }
@@ -659,7 +667,7 @@ if($('clearScores')) $('clearScores').onclick = async () => {
 
 // Gameplay params only take effect on a fresh game, so those inputs force a restart.
 const RESTART_ON = new Set(['lives', 'ballSpeed', 'paddleWidth', 'level', 'powerups', 'particles', 'mode', 'timeLimit', 'superHp', 'pipSize',
-  'helixLevels', 'helixSlots', 'helixGap', 'helixHazard', 'helixSmash', 'helixBounce']);
+  'helixLevels', 'helixSlots', 'helixGap', 'helixHazard', 'helixSmash', 'helixBounce', 'helixTempo']);
 function onChange(e){
   fromForm();
   push(e && RESTART_ON.has(e.target.id));

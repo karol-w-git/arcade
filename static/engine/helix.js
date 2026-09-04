@@ -31,6 +31,7 @@ const DEFAULTS = {
   helixSpin: 1.0,         // rotation sensitivity
   helixSmash: 3,          // clean drops needed before the ball smashes through
   helixBounce: 1.0,       // multiplier on the hop off a platform
+  helixTempo: 1.0,        // time scale: below 1 the whole fall runs slower
   hazardColor: '#e63946',
   goalColor: '',          // '' follows the accent
 };
@@ -46,6 +47,23 @@ const GRAVITY = -0.022, BOUNCE = 0.22, MAX_FALL = -0.45;
    level would let the ball climb the tower instead of descending it, so the
    result is clamped to 80% of the spacing however high the setting goes. */
 const V_CAP = Math.sqrt(2 * Math.abs(GRAVITY) * LEVEL_H * 0.8);
+
+/* helixTempo is a time scale, not a strength: it stretches the clock the ball
+   falls on. Height and speed are not the same dial and they pull opposite ways -
+   a shorter hop is over sooner, so turning the height down makes the ball bounce
+   MORE often, which is the reverse of what "slow the bouncing down" means.
+
+   Scaling one frame's worth of time by t means velocity scales by t and
+   acceleration by t*t. Then
+
+     apex   = v^2 / 2g   ->   (v t)^2 / (2 g t^2)   = unchanged
+     period = 2v / g     ->   (2 v t) / (g t^2)     = period / t
+
+   so the arc keeps its shape exactly and only the tempo changes: t = 0.5 is
+   half speed and twice as long between bounces. It slows the fall too, which is
+   the point - a ball that hangs between hops but drops like a stone would read
+   as broken. */
+const tempoOf = c => clamp(+c.helixTempo || 1, 0.4, 1.5);
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const TAU = Math.PI * 2;
@@ -73,8 +91,10 @@ function helix(canvas, userConfig, opts){
   const levels = () => clamp(+cfg.helixLevels || 24, 5, 80);
   const accentCol = () => cfg.accent || '#4cc9f0';
   const goalCol = () => cfg.goalColor || accentCol();
+  const tempo = () => tempoOf(cfg);
+  // the hop, in this instance's units of time
   const bounceV = () =>
-    Math.min(BOUNCE * clamp(+cfg.helixBounce || 1, 0.3, 2), V_CAP);
+    Math.min(BOUNCE * clamp(+cfg.helixBounce || 1, 0.3, 2), V_CAP) * tempo();
 
   const hud = () => onHud && onHud({
     score: score, lives: lives, level: depth, state: state,
@@ -454,7 +474,8 @@ function helix(canvas, userConfig, opts){
     if(state !== 'play'){ stepShards(); return; }
 
     // fall
-    ball.vy = Math.max(MAX_FALL, ball.vy + GRAVITY);
+    const t = tempo();
+    ball.vy = Math.max(MAX_FALL * t, ball.vy + GRAVITY * t * t);
     const nextY = ball.y + ball.vy;
 
     if(ball.vy < 0){

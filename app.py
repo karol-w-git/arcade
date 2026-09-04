@@ -174,6 +174,7 @@ GAME_TYPES["helix"] = {
         "helixSpin": 1.0,       # rotation sensitivity
         "helixSmash": 3,        # clean drops before the ball smashes through
         "helixBounce": 1.0,     # multiplier on the hop off a platform
+        "helixTempo": 1.0,      # time scale: below 1 the ball bounces less often
         "hazardColor": "#e63946",
         "goalColor": "",        # "" follows the accent
     },
@@ -406,6 +407,7 @@ def clean_config(game_type: str, raw: dict) -> dict:
     clamp_float("helixSpin", 0.2, 3.0)
     clamp_int("helixSmash", 1, 20)
     clamp_float("helixBounce", 0.3, 2.0)
+    clamp_float("helixTempo", 0.4, 1.5)
     if "helixGap" in out:               # never wide enough to swallow the ring
         out["helixGap"] = max(1, min(max(1, out["helixSlots"] - 2), int(out["helixGap"])))
     if "mode" in out and out["mode"] not in ("classic", "dig"):
